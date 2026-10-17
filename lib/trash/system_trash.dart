@@ -42,4 +42,12 @@ class SystemTrash {
   /// Returns false if they said no.
   static Future<bool> restore(List<String> ids) async =>
       await _channel.invokeMethod<bool>('restore', {'ids': ids}) ?? false;
+
+  /// Erases photos for good, freeing the space now. Android asks the user to
+  /// confirm once. Returns false if they said no.
+  static Future<bool> deleteForever(List<String> ids) async {
+    final ok = await _channel.invokeMethod<bool>('deleteForever', {'ids': ids}) ?? false;
+    if (ok) ids.forEach(_thumbs.remove);
+    return ok;
+  }
 }

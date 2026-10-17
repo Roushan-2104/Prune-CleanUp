@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../trash/system_trash.dart';
 
-/// Shows photos in the phone's Trash with days left, and restores the ticked ones.
+/// Shows photos in the phone's Trash with days left. Ticked ones can be
+/// restored, or deleted forever to free the space right away.
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key, required this.state});
   final AppState state;
@@ -29,6 +30,44 @@ class _TrashScreenState extends State<TrashScreen> {
       widget.state.restored(ids);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Could not restore: $e')));
+    }
+  }
+
+  Future<void> _deleteForever() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ids = _selected.toList();
+    final bytes = (await _photos)
+        .where((p) => _selected.contains(p.id))
+        .fold(0, (sum, p) => sum + p.bytes);
+    if (!mounted) return;
+
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete ${ids.length} photos forever?'),
+        content: Text('This frees ${formatBytes(bytes)} now. '
+            'They cannot be restored after this.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete forever'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+
+    try {
+      if (!await SystemTrash.deleteForever(ids)) return;
+      messenger.showSnackBar(SnackBar(content: Text('Freed ${formatBytes(bytes)}')));
+      setState(() {
+        _selected.clear();
+        _photos = SystemTrash.list();
+      });
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not delete: $e')));
     }
   }
 
@@ -87,12 +126,28 @@ class _TrashScreenState extends State<TrashScreen> {
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(12),
-          child: FilledButton.icon(
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
-            onPressed: _selected.isEmpty ? null : _restore,
-            icon: const Icon(Icons.restore),
-            label: Text(_selected.isEmpty ? 'Select photos to restore' : 'Restore ${_selected.length}'),
-          ),
+          child: Row(children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(52),
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: _selected.isEmpty ? null : _deleteForever,
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('Delete forever'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                onPressed: _selected.isEmpty ? null : _restore,
+                icon: const Icon(Icons.restore),
+                label: Text(_selected.isEmpty ? 'Restore' : 'Restore ${_selected.length}'),
+              ),
+            ),
+          ]),
         ),
       ),
     );

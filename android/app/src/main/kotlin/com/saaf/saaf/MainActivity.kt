@@ -21,12 +21,13 @@ import java.util.concurrent.Executors
 
 /**
  * Hosts the "saaf/trash" channel: lists photos in Android's system Trash,
- * gives their thumbnails, and restores them. Needs Android 11 (API 30)+.
+ * gives their thumbnails, restores them or deletes them permanently.
+ * Needs Android 11 (API 30)+.
  */
 class MainActivity : FlutterActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private var pendingRestore: MethodChannel.Result? = null
+    private var pendingRequest: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -44,7 +45,14 @@ class MainActivity : FlutterActivity() {
             "thumbnail" -> background(result) {
                 thumbnail(call.argument<String>("id")!!.toLong(), call.argument<Int>("size") ?: 300)
             }
-            "restore" -> restore(call.argument<List<String>>("ids")!!.map { it.toLong() }, result)
+            "restore" -> {
+                val uris = call.argument<List<String>>("ids")!!.map { uriOf(it.toLong()) }
+                askUser(uris, result) { MediaStore.createTrashRequest(contentResolver, it, false) }
+            }
+            "deleteForever" -> {
+                val uris = call.argument<List<String>>("ids")!!.map { uriOf(it.toLong()) }
+                askUser(uris, result) { MediaStore.createDeleteRequest(contentResolver, it) }
+            }
             else -> result.notImplemented()
         }
     }
@@ -110,29 +118,36 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    /** Android shows one "Restore N items?" dialog; we report whether the user agreed. */
-    private fun restore(ids: List<Long>, result: MethodChannel.Result) {
-        if (ids.isEmpty()) {
+    /**
+     * Restore and permanent delete both go through an Android system dialog
+     * ("Restore N items?" / "Permanently delete N items?"). We report whether
+     * the user agreed.
+     */
+    private fun askUser(
+        uris: List<Uri>,
+        result: MethodChannel.Result,
+        makeRequest: (List<Uri>) -> android.app.PendingIntent,
+    ) {
+        if (uris.isEmpty()) {
             result.success(true)
             return
         }
-        pendingRestore?.error("cancelled", "Another restore started", null)
-        pendingRestore = result
-        val request = MediaStore.createTrashRequest(contentResolver, ids.map(::uriOf), false)
-        startIntentSenderForResult(request.intentSender, RESTORE_REQUEST, null, 0, 0, 0)
+        pendingRequest?.error("cancelled", "Another request started", null)
+        pendingRequest = result
+        startIntentSenderForResult(makeRequest(uris).intentSender, USER_REQUEST, null, 0, 0, 0)
     }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == RESTORE_REQUEST) {
-            pendingRestore?.success(resultCode == Activity.RESULT_OK)
-            pendingRestore = null
+        if (requestCode == USER_REQUEST) {
+            pendingRequest?.success(resultCode == Activity.RESULT_OK)
+            pendingRequest = null
             return
         }
         super.onActivityResult(requestCode, resultCode, data)
     }
 
     companion object {
-        private const val RESTORE_REQUEST = 4207
+        private const val USER_REQUEST = 4207
     }
 }
