@@ -26,7 +26,7 @@ class _TrashScreenState extends State<TrashScreen> {
         _selected.clear();
         _photos = SystemTrash.list();
       });
-      widget.state.startScan();
+      widget.state.restored(ids);
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Could not restore: $e')));
     }

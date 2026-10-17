@@ -212,6 +212,18 @@ class _Tile extends StatelessWidget {
             Text('Confidence: ${(item.verdict.confidence * 100).round()}% · ${formatBytes(item.bytes)}'),
             if (pay != null && (pay.amount != null || pay.payee != null))
               Text('Payment: ${pay.amount != null ? '₹${pay.amount}' : ''} ${pay.payee ?? ''}'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.favorite_border),
+                label: const Text("Keep — don't suggest again"),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  state.keep(item);
+                },
+              ),
+            ),
           ]),
         ),
       ),

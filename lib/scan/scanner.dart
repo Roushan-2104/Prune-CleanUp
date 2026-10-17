@@ -24,6 +24,9 @@ class ScanItem {
   /// For duplicates / similar photos: the photo we are keeping, which this
   /// one was matched against. Shown side by side so the user can compare.
   final AssetEntity? match;
+
+  ScanItem withVerdict(Verdict v) =>
+      identical(v, verdict) ? this : ScanItem(asset, v, bytes, payment: payment, match: match);
 }
 
 class ScanProgress {
