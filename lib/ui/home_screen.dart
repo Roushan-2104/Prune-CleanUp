@@ -5,6 +5,7 @@ import '../app_state.dart';
 import '../scan/scanner.dart';
 import '../scan/verdict.dart';
 import 'category_screen.dart';
+import 'trash_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key, required this.state});
@@ -13,7 +14,14 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Saaf')),
+      appBar: AppBar(title: const Text('Saaf'), actions: [
+        IconButton(
+          tooltip: 'Trash',
+          icon: const Icon(Icons.delete_outline),
+          onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => TrashScreen(state: state))),
+        ),
+      ]),
       body: ListenableBuilder(
         listenable: state,
         builder: (context, _) => switch (state.status) {

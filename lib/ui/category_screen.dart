@@ -124,11 +124,13 @@ class CategoryScreen extends StatelessWidget {
   Future<void> _trash(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final n = await state.trashSelected(category);
-      if (n > 0) {
-        messenger.showSnackBar(SnackBar(
-            content: Text('Moved $n to Trash. You can restore them for 30 days.')));
-      }
+      final moved = await state.trashSelected(category);
+      if (moved.isEmpty) return;
+      messenger.showSnackBar(SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text('Moved ${moved.length} to Trash. Restore anytime within 30 days.'),
+        action: SnackBarAction(label: 'UNDO', onPressed: () => state.undoTrash(moved)),
+      ));
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Could not move to Trash: $e')));
     }

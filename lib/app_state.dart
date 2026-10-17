@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'scan/scanner.dart';
 import 'scan/verdict.dart';
+import 'trash/system_trash.dart';
 
 enum ScanStatus { idle, noPermission, scanning, done }
 
@@ -65,15 +66,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Moves the selected items of [category] to Trash. Returns how many moved.
-  Future<int> trashSelected(JunkCategory category) async {
+  /// Moves the selected items of [category] to Trash. Returns the ids moved.
+  Future<List<String>> trashSelected(JunkCategory category) async {
     final chosen = itemsIn(category).where((i) => selected.contains(i.asset.id)).toList();
-    if (chosen.isEmpty) return 0;
-    final moved = (await moveToTrash(chosen.map((i) => i.asset).toList())).toSet();
-    items.removeWhere((i) => moved.contains(i.asset.id));
-    selected.removeAll(moved);
+    if (chosen.isEmpty) return [];
+    final moved = await moveToTrash(chosen.map((i) => i.asset).toList());
+    final movedSet = moved.toSet();
+    items.removeWhere((i) => movedSet.contains(i.asset.id));
+    selected.removeAll(movedSet);
     notifyListeners();
-    return moved.length;
+    return moved;
+  }
+
+  /// Puts trashed photos back, then refreshes results (only those few get re-checked).
+  Future<bool> undoTrash(List<String> ids) async {
+    if (!await SystemTrash.restore(ids)) return false;
+    await startScan();
+    return true;
   }
 
   @override
