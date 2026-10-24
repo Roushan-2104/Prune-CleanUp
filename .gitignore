@@ -49,3 +49,6 @@ app.*.map.json
 
 # Local Claude Code / plugin data
 .claude/
+
+# Built helper (rebuild with packages/vision_helper/build.ps1)
+packages/vision_helper/bin/

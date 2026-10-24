@@ -1,0 +1,10 @@
+name: declutter_engine
+description: Declutter's brain — detection rules, duplicate matching, learning and accuracy scoring. Pure Dart, no UI.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+
+dev_dependencies:
+  test: ^1.25.0
