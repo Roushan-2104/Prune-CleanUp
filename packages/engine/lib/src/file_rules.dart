@@ -110,8 +110,49 @@ Map<String, FileVerdict> classifyFiles(List<FileFacts> files,
       continue;
     }
 
-    if (!f.isVideo) continue;
     final ageDays = now.difference(DateTime.fromMillisecondsSinceEpoch(f.modifiedSec * 1000)).inDays;
+    final folder = f.folder.toLowerCase();
+    final name = f.name.toLowerCase();
+    final months = (ageDays / 30).floor();
+
+    // Caches the phone rebuilds by itself.
+    if (folder.contains('.thumbnails/')) {
+      result[f.path] = const FileVerdict(Verdict(JunkCategory.cacheFiles, 0.92,
+          ['Gallery preview cache', 'Rebuilt automatically when needed']));
+      continue;
+    }
+    if (folder.contains('whatsapp/media/.statuses/')) {
+      result[f.path] = const FileVerdict(Verdict(JunkCategory.cacheFiles, 0.92,
+          ['A WhatsApp status you viewed', 'Statuses expire after 24 hours anyway']));
+      continue;
+    }
+
+    // App installers: the app keeps working once installed.
+    if (name.endsWith('.apk') || name.endsWith('.xapk') || name.endsWith('.apks')) {
+      result[f.path] = FileVerdict(ageDays >= 14
+          ? Verdict(JunkCategory.oldInstaller, 0.9,
+              ['App installer file, $ageDays days old', 'Installed apps keep working without it'])
+          : Verdict(JunkCategory.oldInstaller, 0.7, ['App installer downloaded $ageDays days ago']));
+      continue;
+    }
+
+    // Old voice notes: often kept for a reason, so never pre-selected.
+    if (folder.contains('whatsapp voice notes') && ageDays > 90) {
+      result[f.path] = FileVerdict(Verdict(JunkCategory.oldVoiceNote, 0.65, ['Voice note from $months months ago']));
+      continue;
+    }
+
+    // Documents and downloads nobody has touched in half a year.
+    final oldDocument = ageDays > 180 && f.bytes >= 1 << 20 && !f.isVideo && !f.mime.startsWith('image/');
+    if (oldDocument && (folder.startsWith('download/') || folder.contains('whatsapp documents'))) {
+      result[f.path] = FileVerdict(Verdict(JunkCategory.oldDocument, 0.6, [
+        folder.startsWith('download/') ? 'In Downloads, untouched for $months months' : 'Received on WhatsApp $months months ago',
+        'Check if you still need it',
+      ]));
+      continue;
+    }
+
+    if (!f.isVideo) continue;
 
     // 3. Camera clips too short to be intentional.
     final d = f.durationMs;

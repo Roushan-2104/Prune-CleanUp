@@ -29,7 +29,8 @@ enum TrueLabel {
         JunkCategory.exactDuplicate || JunkCategory.nearDuplicate => this == duplicate,
         // No dedicated answer buttons for these yet: right if the user agrees it's junk.
         JunkCategory.whatsappSent || JunkCategory.shortClip || JunkCategory.screenRecording ||
-        JunkCategory.largeVideo => isJunk,
+        JunkCategory.largeVideo || JunkCategory.oldInstaller || JunkCategory.oldVoiceNote ||
+        JunkCategory.oldDocument || JunkCategory.cacheFiles => isJunk,
       };
 }
 

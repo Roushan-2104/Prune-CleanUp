@@ -137,28 +137,47 @@ bool _anyWord(String text, List<String> words) =>
 int _countWords(String text, List<String> words) =>
     words.where((w) => RegExp('\\b${RegExp.escape(w)}\\b').hasMatch(text)).length;
 
-// OCR often reads "₹" as "rs", "rs.", "inr", "%" or "z" — e.g. "₹250" → "%250".
-final _amount = RegExp(r'(?:₹|%|\brs\.?|\binr|\bz)\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)');
+// Amounts in any common currency, symbol or code first ("$25.00", "₹250",
+// "usd 40") or after ("45,20 €", "120 eur"). OCR often reads "₹" as "rs",
+// "inr", "%" or "z" — e.g. "₹250" → "%250".
+final _amount = RegExp(
+    r'(?:₹|%|\brs\.?|\binr|\bz|\$|€|£|¥|₱|₦|₩|₺|₽|\br\$|\b(?:usd|eur|gbp|aud|cad|sgd|aed|php|ngn|brl|jpy|chf)\b)'
+    r'\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)');
+final _amountAfter = RegExp(r'\b([0-9][0-9.,]*[0-9])\s?(?:€|£|\b(?:eur|usd|gbp|chf|kr|zł)\b)');
+
+bool _hasAmount(String text) => _amount.hasMatch(text) || _amountAfter.hasMatch(text);
 
 // Short status words UPI apps print under each payment ("Paid · 10:42 pm").
 final _paymentStatusWord = RegExp(r'\b(?:paid|received|sent|debited|credited|refunded)\b');
 
 const _paymentSuccess = [
+  // India
   'paid to', 'payment successful', 'paid successfully', 'transaction successful',
   'money sent', 'sent successfully', 'received from', 'payment received',
   'debited from', 'credited to', 'transfer successful',
+  // Worldwide
+  'you sent', 'you paid', 'you received', 'payment sent', 'payment complete', 'payment confirmed',
+  'transfer complete', 'transaction complete', 'thanks for your payment', 'paid with', 'payment to',
+  'money received', 'request paid',
 ];
 const _paymentIds = [
   'upi ref', 'upi transaction id', 'transaction id', 'utr', 'upi id',
   'txn id', 'reference no', 'ref no', 'order id',
+  'transaction number', 'reference number', 'reference:', 'confirmation number', 'receipt number',
+  'payment id', 'authorization code',
 ];
 const _paymentApps = [
+  // India
   'phonepe', 'google pay', 'gpay', 'paytm', 'bhim', 'amazon pay', 'cred',
   'upi', 'navi', 'mobikwik', 'supermoney',
+  // Worldwide
+  'paypal', 'venmo', 'cash app', 'cashapp', 'zelle', 'revolut', 'wise', 'monzo', 'n26', 'chime',
+  'apple pay', 'google wallet', 'samsung pay', 'alipay', 'wechat pay', 'gcash', 'maya', 'm-pesa', 'mpesa',
+  'pix', 'bkash', 'skrill', 'payoneer', 'klarna', 'grabpay', 'touch n go',
 ];
 
 Verdict? _payment(String text) {
-  final hasAmount = _amount.hasMatch(text);
+  final hasAmount = _hasAmount(text);
   final hasSuccess = _any(text, _paymentSuccess);
   final hasStatus = _paymentStatusWord.hasMatch(text);
   final hasId = _any(text, _paymentIds);
@@ -168,7 +187,7 @@ Verdict? _payment(String text) {
     if (hasAmount) 'Shows an amount',
     if (hasSuccess) 'Says payment was made'
     else if (hasStatus) 'Has payment status like "Paid"',
-    if (hasId) 'Has a transaction / UPI reference',
+    if (hasId) 'Has a transaction reference',
     if (hasApp) 'Mentions a payment app',
   ];
 
@@ -189,12 +208,18 @@ Verdict? _payment(String text) {
   return Verdict(JunkCategory.paymentScreenshot, confidence, reasons);
 }
 
-const _otpWords = ['otp', 'one time password', 'one-time password', 'verification code'];
-const _otpWarnings = ['do not share', "don't share", 'valid for', 'expires in'];
+const _otpWords = [
+  'otp', 'one time password', 'one-time password', 'one-time code', 'verification code', 'security code',
+  'login code', 'sign-in code', 'authentication code', 'passcode', 'your code is', '2fa',
+];
+const _otpWarnings = [
+  'do not share', "don't share", 'never share', 'valid for', 'expires in', 'expires', 'will never ask',
+  "won't ask", 'did not request', "didn't request",
+];
 
 Verdict? _otp(String text) {
   if (!_any(text, _otpWords)) return null;
-  final hasCode = RegExp(r'\b\d{4,8}\b').hasMatch(text);
+  final hasCode = RegExp(r'\b\d{4,8}\b|\b\d{3}[- ]\d{3}\b').hasMatch(text);
   final hasWarning = _any(text, _otpWarnings);
   if (hasCode && hasWarning) {
     return const Verdict(JunkCategory.otpScreenshot, 0.95,
@@ -211,6 +236,8 @@ final _clock = RegExp(r'\b(?:[01]?\d|2[0-3])[:.][0-5]\d\s?(?:am|pm)?\b');
 const _chatUi = [
   'type a message', 'message', 'online', 'last seen', 'typing...', 'delivered',
   'seen', 'end-to-end encrypted', 'yesterday', 'today', 'reply',
+  // Telegram, Discord, iMessage, Messenger, Signal…
+  'write a message', 'send a message', 'active now', 'imessage', 'edited', 'forwarded', 'replied to',
 ];
 
 Verdict? _chat(String text) {

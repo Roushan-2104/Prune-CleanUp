@@ -10,7 +10,7 @@ import 'package:phone_link/phone_link.dart';
 
 Future<void> main(List<String> args) async {
   final adb = Adb(args.first);
-  final phone = (await adb.devices()).where((d) => d.ready).firstOrNull;
+  final phone = (await adb.devices()).where((d) => d.ready && !PhoneCleaner.isVirtualPhone(d.serial)).firstOrNull;
   if (phone == null) {
     stderr.writeln('No phone ready.');
     exitCode = 1;

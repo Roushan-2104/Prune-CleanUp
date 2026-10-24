@@ -222,6 +222,10 @@ class _Items extends StatelessWidget {
         JunkCategory.shortClip => 'Camera videos under 2 seconds, usually recorded by accident.',
         JunkCategory.screenRecording => 'Screen recordings, oldest first likely safe to remove.',
         JunkCategory.largeVideo => 'Very large videos. Not ticked: check whether you still need them on the phone.',
+        JunkCategory.oldInstaller => 'App installer files. Installed apps keep working without them.',
+        JunkCategory.oldVoiceNote => 'WhatsApp voice notes older than 3 months. Not ticked: some may matter to you.',
+        JunkCategory.oldDocument => 'Downloads and WhatsApp documents untouched for 6+ months. Not ticked: check first.',
+        JunkCategory.cacheFiles => 'Gallery previews and WhatsApp statuses you viewed. Rebuilt or expired automatically.',
         _ => 'Ticked items are ones Declutter is sure about. Others are for you to check.',
       };
 }

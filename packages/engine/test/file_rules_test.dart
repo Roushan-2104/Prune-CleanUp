@@ -76,6 +76,42 @@ void main() {
     expect(v.tier, Tier.maybe);
   });
 
+  group('other files', () {
+    Verdict? one(FileFacts x) => classifyFiles([x], now: now)[x.path]?.verdict;
+
+    test('old app installer is sure junk; a fresh one only maybe', () {
+      final old = one(f('Download/', 'game.apk', mime: 'application/vnd.android.package-archive', age: 40))!;
+      final fresh = one(f('Download/', 'new.apk', mime: 'application/vnd.android.package-archive', age: 2))!;
+      expect(old.category, JunkCategory.oldInstaller);
+      expect(old.tier, Tier.sure);
+      expect(fresh.tier, Tier.maybe);
+    });
+
+    test('gallery thumbnails and viewed WhatsApp statuses are rebuildable caches', () {
+      expect(one(f('Pictures/.thumbnails/', '123.jpg', mime: 'image/jpeg'))!.category, JunkCategory.cacheFiles);
+      expect(one(f('Android/media/com.whatsapp/WhatsApp/Media/.Statuses/', 'a.mp4'))!.tier, Tier.sure);
+    });
+
+    test('old voice notes are suggested but never pre-selected', () {
+      final v = one(f('Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes/202501/', 'PTT-1.opus',
+          mime: 'audio/ogg', age: 200))!;
+      expect(v.category, JunkCategory.oldVoiceNote);
+      expect(v.tier, Tier.maybe);
+      expect(one(f('Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Voice Notes/202610/', 'PTT-2.opus',
+          mime: 'audio/ogg', age: 10)), isNull, reason: 'recent voice notes are left alone');
+    });
+
+    test('old, big downloads and received documents are flagged to check', () {
+      final dl = one(f('Download/', 'manual.pdf', mime: 'application/pdf', bytes: 3 << 20, age: 400))!;
+      expect(dl.category, JunkCategory.oldDocument);
+      expect(dl.tier, Tier.maybe);
+      expect(one(f('Download/', 'small.pdf', mime: 'application/pdf', bytes: 200 << 10, age: 400)), isNull);
+      expect(one(f('Download/', 'recent.pdf', mime: 'application/pdf', bytes: 3 << 20, age: 30)), isNull);
+      expect(one(f('Documents/', 'thesis.pdf', mime: 'application/pdf', bytes: 3 << 20, age: 400)), isNull,
+          reason: 'your own Documents folder is not "downloads"');
+    });
+  });
+
   test('only files sharing a size need hashing', () {
     final a = f('Download/', 'a.pdf', bytes: 70000), b = f('Documents/', 'b.pdf', bytes: 70000), c = f('Download/', 'c.pdf', bytes: 80000);
     expect(sameSizeCandidates([a, b, c]).map((x) => x.name), unorderedEquals(['a.pdf', 'b.pdf']));

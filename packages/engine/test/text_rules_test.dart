@@ -89,6 +89,61 @@ Pay   Request   Message''';
     });
   });
 
+  group('worldwide payments', () {
+    void sure(String name, String text) => test(name, () {
+          final v = classifyScreenshotText(text);
+          expect(v.category, JunkCategory.paymentScreenshot, reason: v.toString());
+          expect(v.tier, Tier.sure, reason: v.toString());
+        });
+
+    sure('PayPal (US)', 'PayPal\nYou sent \$25.00 USD to John Smith\nTransaction ID\n3AB12345CD678901E');
+    sure('Venmo', 'Venmo\nYou paid Sarah Lee\n\$12.50\nPayment ID 3891776\nToday at 9:41 PM');
+    sure('Revolut (euro after the number)', 'Revolut\n45,20 €\nPayment completed\nReference: Dinner');
+    sure('UK bank transfer (£)', 'Monzo\n£120.00\nPayment sent to Tom\nReference number 88271');
+    sure('Cash App', 'Cash App\nYou sent \$40\nto \$jsmith\nTransaction number #D-7G2K');
+    sure('GCash (₱)', 'GCash\nYou sent ₱1,500.00\nRef No. 0012 345 678901\nTransfer complete');
+
+    test('a shopping page with a price is not a payment', () {
+      expect(classifyScreenshotText('Wireless earbuds\n\$79.99\nAdd to cart\nFree shipping').category,
+          isNot(JunkCategory.paymentScreenshot));
+    });
+    test('a news headline with money is not a payment', () {
+      expect(classifyScreenshotText('Markets today\nStocks fell 5% as oil rose to \$120 a barrel\nRead more').category,
+          isNot(JunkCategory.paymentScreenshot));
+    });
+    test('"wise" in a sentence alone does not make a payment', () {
+      expect(classifyScreenshotText('That was a wise decision my friend').category,
+          isNot(JunkCategory.paymentScreenshot));
+    });
+  });
+
+  group('worldwide verification codes', () {
+    test('Microsoft-style 123-456 security code', () {
+      final v = classifyScreenshotText('Your security code is 482-913. Never share this code with anyone.');
+      expect(v.category, JunkCategory.otpScreenshot);
+      expect(v.tier, Tier.sure);
+    });
+    test('login code that expires', () {
+      final v = classifyScreenshotText('Instagram login code: 551204. It expires in 10 minutes.');
+      expect(v.category, JunkCategory.otpScreenshot);
+      expect(v.tier, Tier.sure);
+    });
+  });
+
+  group('worldwide chats', () {
+    test('Telegram with 24-hour times', () {
+      const text = 'Alex\nlast seen recently\nAre we still on for tonight? 21:04\nYes! 21:05\n'
+          'See you at 8 21:05\nGreat 21:07\nWrite a message…';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.chatScreenshot);
+      expect(v.tier, Tier.sure);
+    });
+    test('iMessage', () {
+      const text = 'iMessage\nToday 9:41 AM\nRunning late\nDelivered\nOk no worries 9:43 AM\nThanks 9:44 AM\n9:50 AM';
+      expect(classifyScreenshotText(text).category, JunkCategory.chatScreenshot);
+    });
+  });
+
   group('chat screenshots', () {
     test('WhatsApp chat is sure', () {
       const text = '''

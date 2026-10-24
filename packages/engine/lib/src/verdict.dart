@@ -10,7 +10,11 @@ enum JunkCategory {
   whatsappSent('WhatsApp sent copies'),
   shortClip('Accidental short clips'),
   screenRecording('Old screen recordings'),
-  largeVideo('Very large videos');
+  largeVideo('Very large videos'),
+  oldInstaller('Old app installers'),
+  oldVoiceNote('Old voice notes'),
+  oldDocument('Old documents & downloads'),
+  cacheFiles('Caches that rebuild themselves');
 
   const JunkCategory(this.label);
   final String label;
