@@ -19,6 +19,49 @@ class InventoryDiff {
   String toString() => 'InventoryDiff(+$added ~$changed -$removed =$unchanged)';
 }
 
+/// How a file leaves the phone: into the phone's own Trash (restorable for
+/// 30 days on the phone), or deleted (restorable only from a laptop backup).
+enum CleanMethod { trash, delete }
+
+enum OpState { planned, done, failed, restored }
+
+class PlannedOp {
+  const PlannedOp(this.path, this.bytes, this.method, {this.backup, this.mediaId});
+  final String path;
+  final int bytes;
+  final CleanMethod method;
+
+  /// Android's media id, needed to take a file back out of the phone's Trash.
+  final String? mediaId;
+
+  /// Where the laptop backup of this file is, if one was made.
+  final String? backup;
+}
+
+/// One journal entry.
+class CleanOp {
+  CleanOp._(Row r)
+      : id = r['id'] as int,
+        session = r['session'] as int,
+        path = r['path'] as String,
+        mediaId = r['media_id'] as String?,
+        bytes = r['bytes'] as int,
+        method = CleanMethod.values.byName(r['method'] as String),
+        backup = r['backup'] as String?,
+        state = OpState.values.byName(r['state'] as String),
+        error = r['error'] as String?;
+
+  final int id;
+  final int session;
+  final String path;
+  final String? mediaId;
+  final int bytes;
+  final CleanMethod method;
+  final String? backup;
+  final OpState state;
+  final String? error;
+}
+
 class Store {
   Store._(this._db) {
     _migrate();
@@ -29,13 +72,35 @@ class Store {
   factory Store.inMemory() => Store._(sqlite3.openInMemory());
 
   final Database _db;
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
 
   void _migrate() {
     _db.execute('PRAGMA foreign_keys = ON');
     _db.execute('PRAGMA journal_mode = WAL'); // safe if the app is closed mid-write
     final version = _db.select('PRAGMA user_version').first.columnAt(0) as int;
     if (version >= _schemaVersion) return;
+    if (version < 1) _createV1();
+    if (version < 2) {
+      // The clean-up journal: every change to a phone is written here BEFORE
+      // it happens, then marked done/failed, so an interruption can always be
+      // finished or undone.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS clean_ops (
+          id INTEGER PRIMARY KEY,
+          session INTEGER NOT NULL REFERENCES sessions (id),
+          phone TEXT NOT NULL, path TEXT NOT NULL, media_id TEXT, bytes INTEGER NOT NULL,
+          method TEXT NOT NULL CHECK (method IN ('trash', 'delete')),
+          backup TEXT,
+          state TEXT NOT NULL CHECK (state IN ('planned', 'done', 'failed', 'restored')),
+          error TEXT, at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS clean_ops_by_session ON clean_ops (session);
+      ''');
+    }
+    _db.execute('PRAGMA user_version = $_schemaVersion');
+  }
+
+  void _createV1() {
     _db.execute('''
       CREATE TABLE IF NOT EXISTS phones (
         serial TEXT PRIMARY KEY,
@@ -63,7 +128,6 @@ class Store {
         phone TEXT NOT NULL, started INTEGER NOT NULL, finished INTEGER,
         items_removed INTEGER NOT NULL DEFAULT 0, bytes_freed INTEGER NOT NULL DEFAULT 0
       );
-      PRAGMA user_version = $_schemaVersion;
     ''');
   }
 
@@ -203,6 +267,49 @@ class Store {
   int bytesFreed(String phone) =>
       _db.select('SELECT coalesce(sum(bytes_freed), 0) b FROM sessions WHERE phone = ? AND finished IS NOT NULL',
           [phone]).first['b'] as int;
+
+  /// Writes the whole plan into the journal before anything is touched.
+  /// Returns the op ids in the same order as [ops].
+  List<int> planCleanOps(int session, String phone, List<PlannedOp> ops) {
+    final ids = <int>[];
+    final now = _now();
+    _transaction(() {
+      final put = _db.prepare('''
+        INSERT INTO clean_ops (session, phone, path, media_id, bytes, method, backup, state, at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'planned', ?)
+      ''');
+      try {
+        for (final op in ops) {
+          put.execute([session, phone, op.path, op.mediaId, op.bytes, op.method.name, op.backup, now]);
+          ids.add(_db.lastInsertRowId);
+        }
+      } finally {
+        put.close();
+      }
+    });
+    return ids;
+  }
+
+  void markOp(int id, OpState state, {String? error}) {
+    _db.execute('UPDATE clean_ops SET state = ?, error = ?, at = ? WHERE id = ?', [state.name, error, _now(), id]);
+  }
+
+  /// Ops of a session, in plan order.
+  List<CleanOp> opsOf(int session) => [
+        for (final r in _db.select('SELECT * FROM clean_ops WHERE session = ? ORDER BY id', [session])) CleanOp._(r),
+      ];
+
+  /// Ops left 'planned' by a clean-up that was interrupted (app closed,
+  /// cable pulled). Checked on the next connection of that phone.
+  List<CleanOp> unfinishedOps(String phone) => [
+        for (final r in _db.select("SELECT * FROM clean_ops WHERE phone = ? AND state = 'planned' ORDER BY id", [phone]))
+          CleanOp._(r),
+      ];
+
+  /// The most recent finished clean-up of a phone, for "Undo".
+  int? lastSession(String phone) =>
+      _db.select('SELECT id FROM sessions WHERE phone = ? AND finished IS NOT NULL ORDER BY id DESC LIMIT 1', [phone])
+          .firstOrNull?['id'] as int?;
 
   void _transaction(void Function() body) {
     _db.execute('BEGIN');

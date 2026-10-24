@@ -1,7 +1,10 @@
 import 'package:declutter_engine/declutter_engine.dart';
 import 'package:flutter/material.dart';
+import 'package:phone_link/phone_link.dart';
 
+import 'clean_dialog.dart';
 import 'phone_session.dart';
+import 'review_page.dart';
 
 /// First screen: find the phone, then show what's on it. Read-only.
 class HomePage extends StatelessWidget {
@@ -21,6 +24,22 @@ class HomePage extends StatelessWidget {
                 Text('Declutter', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
                 const SizedBox(width: 12),
                 const _ReadOnlyBadge(),
+                const Spacer(),
+                if (session.devices.where((d) => d.ready).length > 1)
+                  DropdownButton<String>(
+                    value: session.serial,
+                    hint: const Text('Choose a phone'),
+                    items: [
+                      for (final d in session.devices.where((d) => d.ready))
+                        DropdownMenuItem(
+                          value: d.serial,
+                          child: Text(PhoneCleaner.isVirtualPhone(d.serial)
+                              ? 'Virtual phone (${d.serial})'
+                              : '${d.model ?? 'Phone'} (${d.serial})'),
+                        ),
+                    ],
+                    onChanged: (s) => s == null ? null : session.choose(s),
+                  ),
               ]),
               const SizedBox(height: 24),
               Expanded(
@@ -104,6 +123,18 @@ class _Suggestions extends StatelessWidget {
           const SizedBox(height: 4),
           Text('Photos and screenshots are checked after copying them to this laptop (next step).',
               style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          if (rows.isNotEmpty)
+            FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ReviewPage(
+                  session: session,
+                  onClean: (items) => showCleanDialog(context, session, items),
+                ),
+              )),
+              icon: const Icon(Icons.checklist),
+              label: const Text('Review suggestions'),
+            ),
         ]),
       ),
     );

@@ -70,12 +70,39 @@ class PhoneSession extends ChangeNotifier {
   /// Suggestions found from file facts alone (no copying yet), by path.
   Map<String, FileVerdict> suggestions = {};
 
+  /// Every connected phone (real and virtual), and the one the user picked.
+  List<PhoneDevice> devices = [];
+  String? _wanted;
+
+  Adb get adb => _adb!;
+  bool get isVirtual => serial != null && PhoneCleaner.isVirtualPhone(serial!);
+
+  /// Shows a different connected phone.
+  void choose(String s) {
+    _wanted = s;
+    serial = null; // forces a fresh read on the next poll
+    _poll();
+  }
+
+  /// Reads the current phone again (after a clean-up or undo).
+  Future<void> rescan() async {
+    _wanted = serial;
+    serial = null;
+    await _poll();
+  }
+
   Future<void> _poll() async {
     if (_busy) return;
     _busy = true;
     try {
       final phones = await _adb!.devices();
-      final phone = phones.where((p) => p.ready).firstOrNull ?? phones.firstOrNull;
+      if (phones.map((p) => p.serial).join() != devices.map((p) => p.serial).join()) {
+        devices = phones;
+        notifyListeners();
+      }
+      final phone = phones.where((p) => p.serial == _wanted && p.ready).firstOrNull ??
+          phones.where((p) => p.ready).firstOrNull ??
+          phones.firstOrNull;
       if (phone == null) {
         _set(LinkState.waiting, clear: true);
       } else if (!phone.ready) {

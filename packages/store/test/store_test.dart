@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:declutter_engine/declutter_engine.dart';
 import 'package:declutter_store/declutter_store.dart';
 import 'package:phone_link/phone_link.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:test/test.dart';
 
 PhoneFile file(String name, {int bytes = 100, int modified = 1, String mime = 'image/jpeg'}) => PhoneFile(
@@ -77,6 +78,62 @@ void main() {
     store.finishSession(store.startSession('p1'), itemsRemoved: 5, bytesFreed: 500);
     store.startSession('p1'); // unfinished: interrupted session doesn't count
     expect(store.bytesFreed('p1'), 1500);
+  });
+
+  test('journal: plan is written before anything happens, then marked', () {
+    final s = store.startSession('p1');
+    final ids = store.planCleanOps(s, 'p1', const [
+      PlannedOp('/a.jpg', 10, CleanMethod.trash),
+      PlannedOp('/b.mp4', 20, CleanMethod.delete, backup: r'C:\backup\b.mp4'),
+    ]);
+    expect(store.unfinishedOps('p1').map((o) => o.path), ['/a.jpg', '/b.mp4']);
+
+    store.markOp(ids[0], OpState.done);
+    store.markOp(ids[1], OpState.failed, error: 'not found');
+    expect(store.unfinishedOps('p1'), isEmpty);
+    final ops = store.opsOf(s);
+    expect(ops.map((o) => o.state), [OpState.done, OpState.failed]);
+    expect(ops[1].backup, r'C:\backup\b.mp4');
+    expect(ops[1].error, 'not found');
+  });
+
+  test('an interrupted clean-up is found on the next start', () async {
+    final dir = await Directory.systemTemp.createTemp('declutter_journal');
+    try {
+      final path = '${dir.path}/declutter.db';
+      final s1 = Store.open(path);
+      final session = s1.startSession('p1');
+      s1.planCleanOps(session, 'p1', const [PlannedOp('/a.jpg', 10, CleanMethod.trash)]);
+      s1.close(); // "crash" before marking anything
+      final s2 = Store.open(path);
+      expect(s2.unfinishedOps('p1').single.path, '/a.jpg');
+      s2.close();
+    } finally {
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('a version-1 database upgrades without losing data', () async {
+    final dir = await Directory.systemTemp.createTemp('declutter_upgrade');
+    try {
+      final path = '${dir.path}/declutter.db';
+      final s1 = Store.open(path)..rememberPhone('p1', info);
+      s1.syncInventory('p1', [file('a.jpg')]);
+      s1.close();
+      // Pretend it's an old file: drop the journal and mark it version 1.
+      final raw = Store.open(path);
+      raw.close();
+      final db = sqlite3.open(path)
+        ..execute('DROP TABLE clean_ops')
+        ..execute('PRAGMA user_version = 1');
+      db.close();
+      final s2 = Store.open(path);
+      expect(s2.fileCount('p1'), 1);
+      expect(s2.unfinishedOps('p1'), isEmpty); // journal table exists again
+      s2.close();
+    } finally {
+      await dir.delete(recursive: true);
+    }
   });
 
   test('data survives closing and reopening the file', () async {
