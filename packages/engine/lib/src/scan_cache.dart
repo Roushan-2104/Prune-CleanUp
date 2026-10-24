@@ -17,6 +17,7 @@ class Analysis {
     this.sharpness,
     this.entropy,
     this.faceCount,
+    this.landscape,
   });
 
   /// The photo's "last modified" time. If it changes, we analyse again.
@@ -36,9 +37,12 @@ class Analysis {
   /// Null until face detection has been run (only done for blur candidates).
   final int? faceCount;
 
+  /// Wider than tall (similar photos are only compared within one orientation).
+  final bool? landscape;
+
   Analysis withFaceCount(int count) => Analysis(
         modified: modified, bytes: bytes, takenAtMs: takenAtMs, screenshot: screenshot,
-        text: text, dHash: dHash, sharpness: sharpness, entropy: entropy, faceCount: count,
+        text: text, dHash: dHash, sharpness: sharpness, entropy: entropy, faceCount: count, landscape: landscape,
       );
 
   Map<String, Object?> toJson() => {
@@ -48,6 +52,7 @@ class Analysis {
         if (sharpness != null) 'p': sharpness,
         if (entropy != null) 'e': entropy,
         if (faceCount != null) 'f': faceCount,
+        if (landscape != null) 'l': landscape,
       };
 
   factory Analysis.fromJson(Map<String, dynamic> j) => Analysis(
@@ -60,6 +65,7 @@ class Analysis {
         sharpness: (j['p'] as num?)?.toDouble(),
         entropy: (j['e'] as num?)?.toDouble(),
         faceCount: j['f'] as int?,
+        landscape: j['l'] as bool?,
       );
 }
 

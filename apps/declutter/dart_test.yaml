@@ -1,0 +1,3 @@
+tags:
+  emulator: {} # needs a running virtual phone; changes files on it
+  phone: {} # needs a connected phone; read-only

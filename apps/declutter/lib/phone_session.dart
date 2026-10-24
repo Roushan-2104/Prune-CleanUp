@@ -6,6 +6,8 @@ import 'package:declutter_store/declutter_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'photo_scan.dart';
+
 enum LinkState { noAdb, waiting, unauthorized, reading, ready, error }
 
 /// What's on the phone, grouped for the overview screen.
@@ -67,8 +69,14 @@ class PhoneSession extends ChangeNotifier {
   /// What is happening while [state] is [LinkState.reading].
   String readingStep = '';
 
-  /// Suggestions found from file facts alone (no copying yet), by path.
+  /// Every suggestion, by path: file facts and on-phone fingerprints, plus
+  /// what the photo check has measured so far.
   Map<String, FileVerdict> suggestions = {};
+  Map<String, FileVerdict> _fileLevel = {};
+
+  /// Checks photos and screenshots in the background once the phone is read.
+  PhotoScan? photos;
+  int _photosDone = -1;
 
   /// Every connected phone (real and virtual), and the one the user picked.
   List<PhoneDevice> devices = [];
@@ -158,8 +166,38 @@ class PhoneSession extends ChangeNotifier {
     _step('Checking ${candidates.length} possible duplicates on the phone…');
     final hashes = await _adb!.fingerprints(s, [for (final c in candidates) c.path],
         onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
-    suggestions = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
+    _fileLevel = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
+
+    _stopPhotos();
+    photos = PhotoScan(adb: _adb!, serial: s, store: store)..addListener(_onPhotos);
+    _merge(files);
     _set(LinkState.ready);
+    unawaited(photos!.run(files));
+  }
+
+  /// Photo results appear batch by batch, without waiting for the end.
+  void _onPhotos() {
+    final p = photos;
+    if (p == null || summary == null) return;
+    final progress = p.running ? p.done : -2;
+    if (progress != _photosDone) {
+      _photosDone = progress;
+      _merge(summary!.files);
+    }
+    notifyListeners();
+  }
+
+  void _merge(List<PhoneFile> files) {
+    suggestions = mergeSuggestions(_fileLevel, photos?.judge(files) ?? {});
+    needAnalysis = store.needingAnalysis(serial!).length;
+  }
+
+  void _stopPhotos() {
+    photos
+      ?..removeListener(_onPhotos)
+      ..stop();
+    photos = null;
+    _photosDone = -1;
   }
 
   void _step(String text) {
@@ -169,6 +207,7 @@ class PhoneSession extends ChangeNotifier {
 
   void _set(LinkState s, {bool clear = false}) {
     if (clear) {
+      _stopPhotos();
       serial = null;
       info = null;
       summary = null;
@@ -182,6 +221,7 @@ class PhoneSession extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _stopPhotos();
     store.close();
     super.dispose();
   }

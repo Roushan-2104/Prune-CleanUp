@@ -72,7 +72,7 @@ class Store {
   factory Store.inMemory() => Store._(sqlite3.openInMemory());
 
   final Database _db;
-  static const _schemaVersion = 2;
+  static const _schemaVersion = 3;
 
   void _migrate() {
     _db.execute('PRAGMA foreign_keys = ON');
@@ -96,6 +96,11 @@ class Store {
         );
         CREATE INDEX IF NOT EXISTS clean_ops_by_session ON clean_ops (session);
       ''');
+    }
+    if (version < 3) {
+      // Orientation, so similar photos are only compared portrait-to-portrait.
+      final has = _db.select('PRAGMA table_info(measurements)').any((c) => c['name'] == 'landscape');
+      if (!has) _db.execute('ALTER TABLE measurements ADD COLUMN landscape INTEGER');
     }
     _db.execute('PRAGMA user_version = $_schemaVersion');
   }
@@ -214,13 +219,13 @@ class Store {
     _transaction(() {
       final put = _db.prepare('''
         INSERT OR REPLACE INTO measurements (phone, path, modified_sec, bytes, taken_ms, screenshot, text,
-                                             dhash, sharpness, entropy, faces, measured_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                             dhash, sharpness, entropy, faces, landscape, measured_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''');
       try {
         for (final MapEntry(key: path, value: a) in byPath.entries) {
           put.execute([phone, path, a.modified, a.bytes, a.takenAtMs, a.screenshot ? 1 : 0, a.text, a.dHash,
-            a.sharpness, a.entropy, a.faceCount, now]);
+            a.sharpness, a.entropy, a.faceCount, a.landscape == null ? null : (a.landscape! ? 1 : 0), now]);
         }
       } finally {
         put.close();
@@ -246,6 +251,7 @@ class Store {
             sharpness: (r['sharpness'] as num?)?.toDouble(),
             entropy: (r['entropy'] as num?)?.toDouble(),
             faceCount: r['faces'] as int?,
+            landscape: r['landscape'] == null ? null : r['landscape'] == 1,
           ),
       };
 

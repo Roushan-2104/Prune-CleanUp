@@ -73,6 +73,32 @@ void main() {
     expect(results[1].text!.toLowerCase(), contains('alive'));
   });
 
+  test('small grayscale copy: right size, no row padding, real pixels', () async {
+    // 900 px wide, white with a black left half.
+    final image = img.Image(width: 900, height: 301);
+    img.fill(image, color: img.ColorRgb8(255, 255, 255));
+    img.fillRect(image, x1: 0, y1: 0, x2: 449, y2: 300, color: img.ColorRgb8(0, 0, 0));
+    final path = '${dir.path}${Platform.pathSeparator}halves.png';
+    await File(path).writeAsBytes(img.encodePng(image));
+
+    final g = (await vision.analyse([path], text: false, gray: true)).single.gray!;
+    expect(g.width, 256);
+    expect(g.height, inInclusiveRange(85, 86));
+    expect(g.pixels.length, g.width * g.height);
+    expect(g.pixels[g.width * 40 + 10], lessThan(30), reason: 'left is black');
+    expect(g.pixels[g.width * 40 + 245], greaterThan(225), reason: 'right is white');
+  });
+
+  test('each image can ask for different jobs', () async {
+    final a = await drawText('text_me', ['Hello there']);
+    final b = await drawText('gray_me', ['Ignored']);
+    final r = await vision.analyseEach([VisionJob(a, text: true), VisionJob(b, gray: true)]);
+    expect(r[0].text!.toLowerCase(), contains('hello'));
+    expect(r[0].gray, isNull);
+    expect(r[1].text, isNull);
+    expect(r[1].gray, isNotNull);
+  });
+
   test('file names with spaces and unicode work', () async {
     final path = await drawText('my photo ₹ नमस्ते', ['Hello world']);
     expect((await vision.readText(path)).text!.toLowerCase(), contains('hello'));

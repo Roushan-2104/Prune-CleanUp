@@ -6,6 +6,7 @@ library;
 export 'src/accuracy.dart';
 export 'src/file_rules.dart';
 export 'src/image_metrics.dart';
+export 'src/image_rules.dart';
 export 'src/learner.dart';
 export 'src/photo_rules.dart';
 export 'src/scan_cache.dart';

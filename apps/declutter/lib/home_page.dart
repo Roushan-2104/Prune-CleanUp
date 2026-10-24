@@ -4,6 +4,7 @@ import 'package:phone_link/phone_link.dart';
 
 import 'clean_dialog.dart';
 import 'phone_session.dart';
+import 'photo_scan.dart';
 import 'review_page.dart';
 
 /// First screen: find the phone, then show what's on it. Read-only.
@@ -124,8 +125,7 @@ class _Suggestions extends StatelessWidget {
               ]),
             ),
           const SizedBox(height: 4),
-          Text('Photos and screenshots are checked after copying them to this laptop (next step).',
-              style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+          if (session.photos case final p?) _PhotoProgress(scan: p),
           const SizedBox(height: 12),
           if (rows.isNotEmpty)
             FilledButton.icon(
@@ -142,6 +142,50 @@ class _Suggestions extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The photo check: progress while it runs, then what's left (if stopped).
+class _PhotoProgress extends StatelessWidget {
+  const _PhotoProgress({required this.scan});
+  final PhotoScan scan;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
+    final muted = t.bodySmall?.copyWith(color: c.onSurfaceVariant);
+    if (scan.running) {
+      final left = scan.timeLeft;
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(
+            child: Text('Checking photos and screenshots: ${scan.done} of ${scan.total}'
+                '${left == null ? '' : ' · about ${_minutes(left)} left'}', style: t.bodyMedium),
+          ),
+          TextButton(onPressed: scan.stop, child: const Text('Pause')),
+        ]),
+        const SizedBox(height: 6),
+        LinearProgressIndicator(value: scan.total == 0 ? null : scan.done / scan.total),
+        const SizedBox(height: 6),
+        Text('${scan.step.isEmpty ? 'Working…' : scan.step} Copies are deleted from this laptop after each batch. '
+            'Results appear above as they come in.', style: muted),
+      ]);
+    }
+    final pending = scan.pending();
+    return Row(children: [
+      Icon(scan.error != null ? Icons.error_outline : pending == 0 ? Icons.check_circle_outline : Icons.pause_circle_outline,
+          size: 18, color: scan.error != null ? c.error : c.primary),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(
+          scan.error ?? (pending == 0 ? 'All photos and screenshots checked.' : '$pending photos not checked yet.'),
+          style: t.bodyMedium,
+        ),
+      ),
+      if (pending > 0) TextButton(onPressed: scan.resume, child: const Text('Continue')),
+    ]);
+  }
+
+  static String _minutes(Duration d) => d.inMinutes < 1 ? 'under a minute' : '${d.inMinutes} min';
 }
 
 /// "First time we've seen this phone" or "Since last time: 12 new, 3 gone".

@@ -7,16 +7,19 @@ import 'package:media_kit/media_kit.dart';
 
 import 'home_page.dart';
 import 'phone_session.dart';
+import 'photo_scan.dart';
 import 'previews.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized(); // in-app video and audio playback
-  PreviewCache.clearAll(); // previews never outlive a session…
+  PreviewCache.clearAll(); // previews and photo copies never outlive a session…
+  PhotoScan.clearWork();
   runApp(DeclutterApp(session: PhoneSession(Store.open(databasePath()))));
   // …and are deleted again when the window is closed.
   _exitListener = AppLifecycleListener(onExitRequested: () async {
     PreviewCache.clearAll();
+    PhotoScan.clearWork();
     return AppExitResponse.exit;
   });
 }

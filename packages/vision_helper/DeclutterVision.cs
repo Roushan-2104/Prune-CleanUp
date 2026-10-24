@@ -5,8 +5,9 @@
 // it runs on any Windows 10/11 PC without installing anything. See build.ps1.
 //
 // Usage:  DeclutterVision.exe <jobs> <list file>
-//   <jobs>       "ocr", "faces" or "ocr,faces"
-//   <list file>  UTF-8 text file, one image path per line
+//   <jobs>       any of "ocr", "faces", "gray", comma-separated (the default)
+//   <list file>  UTF-8 text file, one image per line: "path", or
+//                "jobs<TAB>path" to choose jobs for that image
 // Output (stdout, one JSON object per line):
 //   first line:  {"ready":true,"ocr":true,"ocrLanguage":"en-US","faces":true}
 //   then, per image, in order:
@@ -52,17 +53,22 @@ static class Program
             return 64;
         }
 
-        string[] jobs = args[0].Split(',');
-        bool doOcr = Array.IndexOf(jobs, "ocr") >= 0, doFaces = Array.IndexOf(jobs, "faces") >= 0;
         foreach (string raw in File.ReadAllLines(args[1], new UTF8Encoding(false)))
         {
-            string path = raw.Trim('﻿', '\r', ' ');
-            if (path.Length == 0) continue;
+            string line = raw.Trim('﻿', '\r', ' ');
+            if (line.Length == 0) continue;
+            // A line may say which jobs it wants: "ocr,gray<TAB>path".
+            int tab = line.IndexOf('\t');
+            string[] jobs = (tab >= 0 ? line.Substring(0, tab) : args[0]).Split(',');
+            string path = tab >= 0 ? line.Substring(tab + 1) : line;
+            bool doOcr = Array.IndexOf(jobs, "ocr") >= 0, doFaces = Array.IndexOf(jobs, "faces") >= 0,
+                doGray = Array.IndexOf(jobs, "gray") >= 0;
             Trace("image: " + path);
             string reply;
             try
             {
                 StringBuilder sb = new StringBuilder("{\"path\":").Append(Json(path));
+                if (doGray) sb.Append(SmallGray(path));
                 if (doOcr) sb.Append(ReadText(ocr, path));
                 if (doFaces) sb.Append(CountFaces(faces, path));
                 reply = sb.Append(",\"ok\":true}").ToString();
@@ -76,6 +82,34 @@ static class Program
             Console.Out.Flush();
         }
         return 0;
+    }
+
+    /// A small grayscale copy (longest side 256 px) for blur and look-alike
+    /// checks. Returns `,"gray":{"w":…,"h":…,"stride":…,"b64":"…"}`.
+    static string SmallGray(string path)
+    {
+        // Decoders can't always output grayscale directly on every PC, so
+        // decode as colour (always supported) and convert here.
+        using (SoftwareBitmap bmp = Load(path, 256, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore))
+        {
+            int w = bmp.PixelWidth, h = bmp.PixelHeight;
+            Windows.Storage.Streams.Buffer buffer = new Windows.Storage.Streams.Buffer((uint)(w * h * 4 + 4096));
+            bmp.CopyToBuffer(buffer);
+            byte[] bgra = new byte[buffer.Length];
+            using (DataReader reader = DataReader.FromBuffer(buffer)) reader.ReadBytes(bgra);
+            int stride = h == 0 ? w * 4 : bgra.Length / h; // rows may be padded
+            byte[] gray = new byte[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int i = y * stride + x * 4;
+                    gray[y * w + x] = (byte)((114 * bgra[i] + 587 * bgra[i + 1] + 299 * bgra[i + 2]) / 1000);
+                }
+            }
+            return ",\"gray\":{\"w\":" + w + ",\"h\":" + h + ",\"stride\":" + w +
+                ",\"b64\":\"" + Convert.ToBase64String(gray) + "\"}";
+        }
     }
 
     /// Returns the JSON fields `,"text":…,"lines":n`.
