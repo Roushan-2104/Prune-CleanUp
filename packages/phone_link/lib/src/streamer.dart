@@ -68,7 +68,8 @@ class PhoneStreamer {
     if (offset >= fileSize) return;
     final first = offset ~/ blockSize;
     final last = ((offset + bytes).clamp(0, fileSize) - 1) ~/ blockSize;
-    unawaited(_ensureBlocks(path, fileSize, first, last, ahead: true).catchError((_) {}));
+    // Read-ahead is best effort: a failure here just means a later read asks again.
+    _ensureBlocks(path, fileSize, first, last, ahead: true).ignore();
   }
 
   /// The file the user is looking at now: background read-ahead for other
