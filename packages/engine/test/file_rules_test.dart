@@ -27,6 +27,23 @@ void main() {
     expect(r[sent.path]!.verdict.category, JunkCategory.exactDuplicate);
     expect(r[sent.path]!.verdict.tier, Tier.sure);
     expect(r[sent.path]!.matchPath, original.path);
+    final ev = r[sent.path]!.verdict.evidence;
+    expect(ev['Content fingerprint'], contains('on both'));
+    expect(ev['Size'], '50,000 bytes on both');
+    expect(ev['Kept copy'], 'In Downloads, not a WhatsApp copy');
+  });
+
+  test('every file suggestion explains itself', () {
+    final r = classifyFiles([
+      f('DCIM/Camera/', 'VID_2.mp4', durationMs: 900),
+      f('Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Video/Sent/', 'VID-1.mp4'),
+      f('Download/', 'old.apk', mime: 'application/vnd.android.package-archive', age: 60),
+    ], now: now);
+    for (final v in r.values) {
+      expect(v.verdict.evidence, containsPair('Folder', isNotEmpty));
+      expect(v.verdict.evidence['Last changed'], contains('days ago'));
+    }
+    expect(r.values.firstWhere((v) => v.verdict.category == JunkCategory.shortClip).verdict.evidence['Length'], '0.9 s');
   });
 
   test('same size but different content is NOT a duplicate', () {

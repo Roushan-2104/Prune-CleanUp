@@ -50,7 +50,11 @@ Verdict? classifyBlurMetrics({
     confidence = confidence.clamp(0, 0.65);
     reasons.add('Has people in it — please check');
   }
-  return Verdict(JunkCategory.blurry, confidence, reasons);
+  return Verdict(JunkCategory.blurry, confidence, reasons, evidence: {
+    'Sharpest spot': '${sharpness.round()} (photos below ${config.blurry.round()} look blurry; '
+        'below ${config.veryBlurry.round()} very blurry)',
+    if (faceCount > 0) 'People': '$faceCount face${faceCount == 1 ? '' : 's'} found, so not pre-ticked',
+  });
 }
 
 /// Everything the duplicate finder needs to know about one photo.
@@ -136,21 +140,36 @@ List<DuplicateGroup> findDuplicates(
 Verdict? _compare(PhotoFingerprint keep, PhotoFingerprint p, int nearIdentical, int maxDistance,
     Duration burstWindow, double minEntropy) {
   if (p.contentHash != null && p.contentHash == keep.contentHash) {
-    return const Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of another photo']);
+    return Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of another photo'], evidence: {
+      'Match': 'Same size, same dimensions and same look',
+      'Kept photo': _whyKeptPhoto(keep, p),
+    });
   }
   if (p.landscape != keep.landscape) return null;
   if (p.entropy < minEntropy || keep.entropy < minEntropy) return null;
 
   final d = hammingDistance(p.dHash, keep.dHash);
-  final inBurst = p.takenAt.difference(keep.takenAt).abs() <= burstWindow;
+  final apart = p.takenAt.difference(keep.takenAt).abs();
+  final inBurst = apart <= burstWindow;
+  final evidence = {
+    'Looks alike': d == 0 ? 'Visual fingerprints identical' : 'Visual fingerprints differ in $d of 64 points',
+    'Taken': inBurst ? '${apart.inSeconds} s apart' : '${_day(keep.takenAt)} and ${_day(p.takenAt)}',
+    'Kept photo': _whyKeptPhoto(keep, p),
+  };
   if (d <= nearIdentical && inBurst) {
-    return const Verdict(JunkCategory.nearDuplicate, 0.9, ['Almost identical, taken seconds apart']);
+    return Verdict(JunkCategory.nearDuplicate, 0.9, ['Almost identical, taken seconds apart'], evidence: evidence);
   }
   if (d <= nearIdentical) {
-    return const Verdict(JunkCategory.nearDuplicate, 0.7, ['Looks almost identical to another photo']);
+    return Verdict(JunkCategory.nearDuplicate, 0.7, ['Looks almost identical to another photo'], evidence: evidence);
   }
   if (inBurst && d <= maxDistance) {
-    return const Verdict(JunkCategory.nearDuplicate, 0.65, ['Similar to a sharper photo taken moments apart']);
+    return Verdict(JunkCategory.nearDuplicate, 0.65, ['Similar to a sharper photo taken moments apart'], evidence: evidence);
   }
   return null;
 }
+
+String _whyKeptPhoto(PhotoFingerprint keep, PhotoFingerprint p) => keep.sharpness > p.sharpness
+    ? 'Sharper (detail ${keep.sharpness.round()} vs ${p.sharpness.round()})'
+    : 'Bigger, higher-quality file';
+
+String _day(DateTime t) => '${t.day}/${t.month}/${t.year}';

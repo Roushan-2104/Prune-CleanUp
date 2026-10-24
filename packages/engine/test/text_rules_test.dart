@@ -31,6 +31,12 @@ Debited from XXXX1234''';
       expect(v.category, isNot(JunkCategory.paymentScreenshot));
     });
 
+    test('shows the words it found as evidence', () {
+      final v = classifyScreenshotText('Payment successful\nPaid to Swiggy\n₹250\nUPI Ref 4287');
+      expect(v.evidence['Amount found'], '₹250');
+      expect(v.evidence['Words found'], contains('"paid to"'));
+    });
+
     test('extracts amount and payee', () {
       final info = extractPaymentInfo('Paid to\nSample Kirana Store\n₹1,250.00\nUPI Ref 12345');
       expect(info.amount, 1250.0);

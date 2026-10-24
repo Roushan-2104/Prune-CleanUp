@@ -74,11 +74,9 @@ class Learner {
   Verdict apply(Verdict v) {
     final delta = adjustmentFor(bucketOf(v));
     if (delta == 0) return v;
-    return Verdict(
-      v.category,
+    return v.adjusted(
       (v.confidence + delta).clamp(0.0, 0.99),
-      [...v.reasons, delta > 0 ? 'You usually delete these' : 'You often keep these'],
-      label: v.label,
+      [delta > 0 ? 'You usually delete these' : 'You often keep these'],
     );
   }
 

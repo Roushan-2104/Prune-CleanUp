@@ -2,11 +2,16 @@ import 'dart:io';
 
 import 'package:declutter_store/declutter_store.dart';
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'home_page.dart';
 import 'phone_session.dart';
+import 'previews.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized(); // in-app video and audio playback
+  PreviewCache.clearAll(); // previews never outlive a session
   runApp(DeclutterApp(session: PhoneSession(Store.open(databasePath()))));
 }
 

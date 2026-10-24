@@ -25,9 +25,17 @@ enum Tier { sure, maybe, hidden }
 
 /// The engine's opinion about one gallery item.
 class Verdict {
-  const Verdict(this.category, this.confidence, this.reasons, {this.label});
+  const Verdict(this.category, this.confidence, this.reasons, {this.label, this.evidence = const {}});
 
   final JunkCategory category;
+
+  /// The facts behind the verdict, shown as "How we know", in order —
+  /// e.g. {"Content fingerprint": "3f2a…9c1e on both", "Size": "2,345,678 bytes on both"}.
+  final Map<String, String> evidence;
+
+  /// The same verdict with a different confidence and extra reasons.
+  Verdict adjusted(double confidence, List<String> moreReasons) =>
+      Verdict(category, confidence, [...reasons, ...moreReasons], label: label, evidence: evidence);
 
   /// Finer grouping inside a category, e.g. "Instagram / Reels" for an
   /// [JunkCategory.otherScreenshot]. Null when there is nothing more specific.

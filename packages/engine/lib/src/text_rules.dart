@@ -191,6 +191,13 @@ Verdict? _payment(String text) {
     if (hasApp) 'Mentions a payment app',
   ];
 
+  final amountText = (_amount.firstMatch(text) ?? _amountAfter.firstMatch(text))?.group(0)?.trim();
+  final evidence = {
+    if (amountText != null) 'Amount found': amountText,
+    'Words found': _quoted([..._paymentSuccess, ..._paymentIds].where(text.contains).take(3)),
+    if (hasApp) 'App': _paymentApps.firstWhere((w) => RegExp('\\b${RegExp.escape(w)}\\b').hasMatch(text)),
+  };
+
   double confidence;
   if (hasAmount && hasSuccess && hasId) {
     confidence = 0.97;
@@ -205,8 +212,11 @@ Verdict? _payment(String text) {
   } else {
     return null;
   }
-  return Verdict(JunkCategory.paymentScreenshot, confidence, reasons);
+  return Verdict(JunkCategory.paymentScreenshot, confidence, reasons, evidence: evidence);
 }
+
+/// ["paid to", "utr"] → '"paid to", "utr"' (or "—" when empty).
+String _quoted(Iterable<String> words) => words.isEmpty ? '—' : words.map((w) => '"$w"').join(', ');
 
 const _otpWords = [
   'otp', 'one time password', 'one-time password', 'one-time code', 'verification code', 'security code',
@@ -221,12 +231,13 @@ Verdict? _otp(String text) {
   if (!_any(text, _otpWords)) return null;
   final hasCode = RegExp(r'\b\d{4,8}\b|\b\d{3}[- ]\d{3}\b').hasMatch(text);
   final hasWarning = _any(text, _otpWarnings);
+  final evidence = {'Words found': _quoted([..._otpWords, ..._otpWarnings].where(text.contains).take(3))};
   if (hasCode && hasWarning) {
-    return const Verdict(JunkCategory.otpScreenshot, 0.95,
-        ['Contains a one-time password', 'OTP codes expire quickly']);
+    return Verdict(JunkCategory.otpScreenshot, 0.95,
+        ['Contains a one-time password', 'OTP codes expire quickly'], evidence: evidence);
   }
   if (hasCode) {
-    return const Verdict(JunkCategory.otpScreenshot, 0.75, ['Contains a one-time password']);
+    return Verdict(JunkCategory.otpScreenshot, 0.75, ['Contains a one-time password'], evidence: evidence);
   }
   return null;
 }
@@ -243,15 +254,19 @@ const _chatUi = [
 Verdict? _chat(String text) {
   final times = _clock.allMatches(text).length;
   final hasUi = _any(text, _chatUi);
+  final evidence = {
+    'Message times found': '$times (e.g. ${_quoted(_clock.allMatches(text).take(2).map((m) => m.group(0)!))})',
+    if (hasUi) 'Chat screen words': _quoted(_chatUi.where(text.contains).take(3)),
+  };
   if (times >= 4 && hasUi) {
     return Verdict(JunkCategory.chatScreenshot, 0.92,
-        ['$times message timestamps', 'Looks like a chat screen']);
+        ['$times message timestamps', 'Looks like a chat screen'], evidence: evidence);
   }
   if (times >= 3) {
-    return Verdict(JunkCategory.chatScreenshot, 0.75, ['$times message timestamps']);
+    return Verdict(JunkCategory.chatScreenshot, 0.75, ['$times message timestamps'], evidence: evidence);
   }
   if (times >= 2 && hasUi) {
-    return const Verdict(JunkCategory.chatScreenshot, 0.65, ['Looks like a chat screen']);
+    return Verdict(JunkCategory.chatScreenshot, 0.65, ['Looks like a chat screen'], evidence: evidence);
   }
   return null;
 }

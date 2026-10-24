@@ -68,6 +68,30 @@ int _placeRank(String folder) {
 
 const _minDuplicateBytes = 10 * 1024; // tiny files aren't worth the noise
 
+String _whyKept(FileFacts keep, FileFacts copy) {
+  final k = _placeRank(keep.folder), c = _placeRank(copy.folder);
+  if (k < c) {
+    return switch (k) {
+      0 => 'In your camera folder: the original place',
+      1 => 'In your own ${keep.folder.split('/').first} folder',
+      2 => 'In Downloads, not a WhatsApp copy',
+      _ => 'Received copy, not a sent copy',
+    };
+  }
+  return 'The older copy (${shortDate(keep.modifiedSec)}), so the original';
+}
+
+/// 2345678 → "2,345,678".
+String groupDigits(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ',');
+
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/// Seconds since 1970 → "12 Mar 2026".
+String shortDate(int sec) {
+  final d = DateTime.fromMillisecondsSinceEpoch(sec * 1000);
+  return '${d.day} ${_months[d.month - 1]} ${d.year}';
+}
+
 /// Judges files from their facts alone (no copying needed).
 ///
 /// [contentHash] maps path → a hash of the file's bytes (computed on the
@@ -90,9 +114,14 @@ Map<String, FileVerdict> classifyFiles(List<FileFacts> files,
       return r != 0 ? r : a.modifiedSec.compareTo(b.modifiedSec); // oldest = the original
     });
     final keep = group.first;
+    final h = contentHash[keep.path]!;
     for (final copy in group.skip(1)) {
       result[copy.path] = FileVerdict(
-        Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of ${keep.folder}${keep.name}']),
+        Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of ${keep.folder}${keep.name}'], evidence: {
+          'Content fingerprint': '${h.length > 10 ? '${h.substring(0, 4)}…${h.substring(h.length - 4)}' : h} on both',
+          'Size': '${groupDigits(copy.bytes)} bytes on both',
+          'Kept copy': _whyKept(keep, copy),
+        }),
         matchPath: keep.path,
       );
     }
@@ -175,7 +204,34 @@ Map<String, FileVerdict> classifyFiles(List<FileFacts> files,
           ['Very large: ${(f.bytes / (1 << 30)).toStringAsFixed(1)} GB', 'Check if you still need it here']));
     }
   }
-  return result;
+  return _withBasicEvidence(result, candidates, now);
+}
+
+/// Adds the basic facts (folder, size, date, length) as "How we know"
+/// evidence to verdicts that don't carry their own.
+Map<String, FileVerdict> _withBasicEvidence(Map<String, FileVerdict> result, List<FileFacts> files, DateTime now) {
+  final byPath = {for (final f in files) f.path: f};
+  return {
+    for (final MapEntry(key: path, value: fv) in result.entries)
+      path: fv.verdict.evidence.isNotEmpty
+          ? fv
+          : FileVerdict(
+              Verdict(fv.verdict.category, fv.verdict.confidence, fv.verdict.reasons,
+                  label: fv.verdict.label, evidence: _basicEvidence(byPath[path]!, now)),
+              matchPath: fv.matchPath,
+            ),
+  };
+}
+
+Map<String, String> _basicEvidence(FileFacts f, DateTime now) {
+  final days = now.difference(DateTime.fromMillisecondsSinceEpoch(f.modifiedSec * 1000)).inDays;
+  final d = f.durationMs;
+  return {
+    'Folder': f.folder.isEmpty ? '(phone storage)' : f.folder,
+    'Size': f.bytes >= 1 << 20 ? '${(f.bytes / (1 << 20)).toStringAsFixed(1)} MB' : '${(f.bytes / 1024).toStringAsFixed(0)} KB',
+    'Last changed': '${shortDate(f.modifiedSec)} · $days days ago',
+    if (d != null && d > 0) 'Length': '${(d / 1000).toStringAsFixed(1)} s',
+  };
 }
 
 /// Files that share an exact size with another (non-protected, non-tiny)

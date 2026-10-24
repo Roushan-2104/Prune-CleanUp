@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'media_view.dart';
 import 'phone_session.dart';
+import 'previews.dart';
 
 /// The user's ticks while reviewing. "Sure" suggestions start ticked.
 class Selection extends ChangeNotifier {
@@ -25,7 +27,9 @@ class Selection extends ChangeNotifier {
   }
 }
 
-/// Big-screen review: categories on the left, items on the right.
+/// Big-screen review: categories on the left, items in the middle, and the
+/// selected item on the right — shown large, next to the copy it matched,
+/// with the evidence ("How we know").
 class ReviewPage extends StatefulWidget {
   const ReviewPage({super.key, required this.session, this.onClean});
   final PhoneSession session;
@@ -39,7 +43,12 @@ class ReviewPage extends StatefulWidget {
 
 class _ReviewPageState extends State<ReviewPage> {
   late final Selection selection = Selection(widget.session.suggestions);
+  late final PreviewCache? previews =
+      widget.session.serial == null ? null : PreviewCache(widget.session.adb, widget.session.serial!);
   JunkCategory? _current;
+
+  /// The item shown in the detail panel.
+  String? focused;
 
   // The phone is re-read after every clean-up or undo, so everything below
   // is derived from the session's *current* data on each build.
@@ -78,7 +87,18 @@ class _ReviewPageState extends State<ReviewPage> {
 
   int bytesOf(Iterable<String> paths) => paths.fold(0, (s, p) => s + (byPath[p]?.bytes ?? 0));
 
-  void show(JunkCategory c) => setState(() => _current = c);
+  void show(JunkCategory c) => setState(() {
+        _current = c;
+        focused = null;
+      });
+
+  void focus(String path) => setState(() => focused = path);
+
+  void _move(List<MapEntry<String, FileVerdict>> items, int step) {
+    if (items.isEmpty) return;
+    final i = items.indexWhere((e) => e.key == focused);
+    focus(items[(i < 0 ? 0 : i + step).clamp(0, items.length - 1)].key);
+  }
 
   @override
   void initState() {
@@ -118,20 +138,33 @@ class _ReviewPageState extends State<ReviewPage> {
       );
     }
     final items = itemsIn(current);
+    final focusedEntry = items.where((e) => e.key == focused).firstOrNull;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyA, control: true): () =>
             selection.setAll(items.map((e) => e.key), true),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(items, 1),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(items, -1),
+        const SingleActivator(LogicalKeyboardKey.space): () {
+          if (focusedEntry != null) selection.toggle(focusedEntry.key);
+        },
         const SingleActivator(LogicalKeyboardKey.escape): () => Navigator.of(context).maybePop(),
       },
       child: Focus(
         autofocus: true,
         child: Scaffold(
           appBar: AppBar(title: const Text('Review suggestions')),
-          body: Row(children: [
-            SizedBox(width: 300, child: _CategoryList(state: this)),
+          body: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(width: 260, child: _CategoryList(state: this)),
             const VerticalDivider(width: 1),
             Expanded(child: _Items(state: this, category: current, items: items)),
+            const VerticalDivider(width: 1),
+            SizedBox(
+              width: 480,
+              child: focusedEntry == null
+                  ? const _DetailHint()
+                  : _Detail(key: ValueKey(focusedEntry.key), state: this, entry: focusedEntry),
+            ),
           ]),
           bottomNavigationBar: _CleanBar(state: this),
         ),
@@ -194,6 +227,8 @@ class _Items extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(category.label, style: t.titleLarge),
                   Text(_explain(category), style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+                  Text('Click an item to see it large · ↑ ↓ to move · Space to tick',
+                      style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
                 ]),
               ),
               TextButton(
@@ -219,7 +254,7 @@ class _Items extends StatelessWidget {
   static String _explain(JunkCategory c) => switch (c) {
         JunkCategory.whatsappSent => 'Copies WhatsApp keeps of things you sent. Chats will show them as no longer on this phone.',
         JunkCategory.exactDuplicate => 'Byte-for-byte identical copies, confirmed by fingerprint. The original (green) stays.',
-        JunkCategory.shortClip => 'Camera videos under 2 seconds, usually recorded by accident.',
+        JunkCategory.shortClip => 'Camera videos under 2 seconds, usually recorded by accident. Play them to check.',
         JunkCategory.screenRecording => 'Screen recordings, oldest first likely safe to remove.',
         JunkCategory.largeVideo => 'Very large videos. Not ticked: check whether you still need them on the phone.',
         JunkCategory.oldInstaller => 'App installer files. Installed apps keep working without them.',
@@ -243,21 +278,27 @@ class _DuplicateGroups extends StatelessWidget {
       groups.putIfAbsent(e.value.matchPath ?? e.key, () => []).add(e);
     }
     final keys = groups.keys.toList();
-    final c = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
     return ListView.builder(
       itemCount: keys.length,
       itemBuilder: (context, i) {
         final kept = state.byPath[keys[i]];
         return Card(
           margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Column(children: [
             if (kept != null)
               ListTile(
-                leading: Icon(Icons.verified_outlined, color: c.primary),
-                title: Text(kept.name),
+                contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+                leading: Container(
+                  decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 2), borderRadius: BorderRadius.circular(10)),
+                  child: FileThumb(file: kept, previews: state.previews),
+                ),
+                title: Text(kept.name, overflow: TextOverflow.ellipsis),
                 subtitle: Text('Keeping · ${kept.folder}'),
-                trailing: Text(formatBytes(kept.bytes)),
+                trailing: Text('KEEP', style: t.labelMedium?.copyWith(color: Colors.green, fontWeight: FontWeight.w700)),
               ),
+            Divider(height: 1, color: c.outlineVariant),
             for (final e in groups[keys[i]]!) _Row(state: state, entry: e, indent: true),
           ]),
         );
@@ -278,21 +319,16 @@ class _Row extends StatelessWidget {
     final v = entry.value.verdict;
     final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
     final date = DateTime.fromMillisecondsSinceEpoch(f.modifiedSec * 1000);
-    return CheckboxListTile(
-      contentPadding: EdgeInsets.only(left: indent ? 40 : 20, right: 20),
-      controlAffinity: ListTileControlAffinity.leading,
-      value: state.selection.has(entry.key),
-      onChanged: (_) => state.selection.toggle(entry.key),
-      secondary: SizedBox(
-        width: 150,
-        child: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [
-          Text(formatBytes(f.bytes), style: t.titleSmall),
-          Text('${date.day}/${date.month}/${date.year}', style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
-        ]),
-      ),
+    return ListTile(
+      selected: state.focused == entry.key,
+      selectedTileColor: c.secondaryContainer.withValues(alpha: 0.5),
+      contentPadding: EdgeInsets.only(left: indent ? 28 : 12, right: 20, top: 2, bottom: 2),
+      onTap: () => state.focus(entry.key),
+      leading: Row(mainAxisSize: MainAxisSize.min, children: [
+        Checkbox(value: state.selection.has(entry.key), onChanged: (_) => state.selection.toggle(entry.key)),
+        FileThumb(file: f, previews: state.previews),
+      ]),
       title: Row(children: [
-        Icon(_icon(f), size: 18, color: c.onSurfaceVariant),
-        const SizedBox(width: 8),
         Flexible(child: Text(f.name, overflow: TextOverflow.ellipsis)),
         const SizedBox(width: 8),
         if (v.tier == Tier.sure)
@@ -300,16 +336,122 @@ class _Row extends StatelessWidget {
       ]),
       subtitle: Text('${f.folder}\n${v.reasons.join(' · ')}', maxLines: 2, overflow: TextOverflow.ellipsis),
       isThreeLine: true,
+      trailing: Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisAlignment: MainAxisAlignment.center, children: [
+        Text(formatBytes(f.bytes), style: t.titleSmall),
+        Text('${date.day}/${date.month}/${date.year}', style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+      ]),
     );
   }
+}
 
-  static IconData _icon(PhoneFile f) => f.isVideo
-      ? Icons.movie_outlined
-      : f.isImage
-          ? Icons.photo_outlined
-          : f.isAudio
-              ? Icons.graphic_eq
-              : Icons.description_outlined;
+class _DetailHint extends StatelessWidget {
+  const _DetailHint();
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.visibility_outlined, size: 40, color: c.onSurfaceVariant),
+          const SizedBox(height: 12),
+          Text('Click an item to see it here — large, next to the copy it matched, '
+              'with exactly why Declutter picked it.',
+              textAlign: TextAlign.center, style: TextStyle(color: c.onSurfaceVariant)),
+        ]),
+      ),
+    );
+  }
+}
+
+/// The selected item, large: side by side with its match, plus the evidence.
+class _Detail extends StatelessWidget {
+  const _Detail({super.key, required this.state, required this.entry});
+  final _ReviewPageState state;
+  final MapEntry<String, FileVerdict> entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
+    final f = state.byPath[entry.key]!;
+    final v = entry.value.verdict;
+    final match = entry.value.matchPath == null ? null : state.byPath[entry.value.matchPath];
+
+    Widget labelled(String label, Color color, PhoneFile file) => Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: t.labelLarge?.copyWith(color: color, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Container(
+              decoration: BoxDecoration(border: Border.all(color: color, width: 3), borderRadius: BorderRadius.circular(12)),
+              child: MediaView(file: file, previews: state.previews, height: 240),
+            ),
+            const SizedBox(height: 6),
+            Text(file.name, style: t.bodySmall, overflow: TextOverflow.ellipsis),
+            Text(file.folder, style: t.bodySmall?.copyWith(color: c.onSurfaceVariant), overflow: TextOverflow.ellipsis),
+          ]),
+        );
+
+    return ListenableBuilder(
+      listenable: state.selection,
+      builder: (context, _) => ListView(padding: const EdgeInsets.all(20), children: [
+        if (match != null)
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            labelled('Keeping', Colors.green, match),
+            const SizedBox(width: 12),
+            labelled(state.selection.has(entry.key) ? 'Removing this copy' : 'This copy (not ticked)', c.error, f),
+          ])
+        else ...[
+          MediaView(file: f, previews: state.previews, height: 340),
+          const SizedBox(height: 10),
+          Text(f.name, style: t.titleMedium),
+          Text(f.folder, style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+        ],
+        const SizedBox(height: 14),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: state.selection.has(entry.key),
+          onChanged: (_) => state.selection.toggle(entry.key),
+          title: Text('Remove ${f.name}'),
+          subtitle: Text('${formatBytes(f.bytes)} · ${v.tier == Tier.sure ? 'Declutter is sure' : 'For you to check'}'),
+        ),
+        const Divider(),
+        Text('Why it was picked', style: t.titleSmall),
+        const SizedBox(height: 4),
+        for (final r in v.reasons)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(Icons.chevron_right, size: 18, color: c.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Expanded(child: Text(r)),
+            ]),
+          ),
+        if (v.evidence.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: c.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(Icons.fact_check_outlined, size: 18, color: c.primary),
+                const SizedBox(width: 8),
+                Text('How we know', style: t.titleSmall),
+              ]),
+              const SizedBox(height: 8),
+              for (final MapEntry(key: k, value: val) in v.evidence.entries)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    SizedBox(width: 150, child: Text(k, style: t.bodySmall?.copyWith(color: c.onSurfaceVariant))),
+                    Expanded(child: SelectableText(val, style: t.bodyMedium)),
+                  ]),
+                ),
+            ]),
+          ),
+        ],
+      ]),
+    );
+  }
 }
 
 class _CleanBar extends StatelessWidget {
