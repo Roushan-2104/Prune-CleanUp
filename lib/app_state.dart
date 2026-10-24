@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import 'learn/learner.dart';
 import 'scan/scanner.dart';
@@ -24,6 +25,9 @@ class AppState extends ChangeNotifier {
 
   /// Asset ids the user has ticked for deletion.
   final selected = <String>{};
+
+  /// Every photo from the last scan, flagged or not (used by the accuracy test).
+  Map<String, AssetEntity> get gallery => _scanner.gallery;
 
   /// On app start: if we've scanned before, refresh right away. Only new
   /// photos get analysed, so this takes seconds, not minutes.

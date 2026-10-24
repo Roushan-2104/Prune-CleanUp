@@ -59,6 +59,9 @@ class Scanner {
 
   Future<bool> hasPreviousScan() async => (await _cacheFile()).exists();
 
+  /// Every photo seen by the last scan, flagged or not.
+  Map<String, AssetEntity> gallery = {};
+
   Future<List<ScanItem>> scan({void Function(ScanProgress)? onProgress}) async {
     final cache = await ScanCache.load(await _cacheFile());
     final paths = await PhotoManager.getAssetPathList(type: RequestType.image, onlyAll: true);
@@ -72,11 +75,18 @@ class Scanner {
     for (var page = 0; page * pageSize < total; page++) {
       assets.addAll(await all.getAssetListPaged(page: page, size: pageSize));
     }
-    final byId = {for (final a in assets) a.id: a};
+    final byId = gallery = {for (final a in assets) a.id: a};
     cache.retainOnly(byId.keys.toSet());
 
     // 2. Analyse only photos that are new or edited since the last scan.
-    final toCheck = assets.where((a) => cache.lookup(a.id, a.modifiedDateSecond ?? 0) == null).toList();
+    bool upToDate(AssetEntity a) {
+      final e = cache.lookup(a.id, a.modifiedDateSecond ?? 0);
+      if (e == null) return false;
+      // Analysed before we looked for screenshots outside the Screenshots folder.
+      return !(e.text == null && !e.screenshot && _mightBeScreenshot(a));
+    }
+
+    final toCheck = assets.where((a) => !upToDate(a)).toList();
     final alreadyChecked = assets.length - toCheck.length;
     onProgress?.call(ScanProgress(0, toCheck.length, alreadyChecked));
     for (final (i, asset) in toCheck.indexed) {
@@ -119,7 +129,12 @@ class Scanner {
 
       if (a.screenshot) {
         final text = a.text ?? '';
-        final verdict = classifyScreenshotText(text);
+        var verdict = classifyScreenshotText(text);
+        if (!_isScreenshot(asset)) {
+          verdict = Verdict(verdict.category, verdict.confidence,
+              ['Screenshot saved or received from another app', ...verdict.reasons],
+              label: verdict.label);
+        }
         items[id] = ScanItem(asset, verdict, a.bytes,
             payment: verdict.category == JunkCategory.paymentScreenshot ? extractPaymentInfo(text) : null);
         continue;
@@ -134,6 +149,8 @@ class Scanner {
         bytes: a.bytes,
         // Same dimensions + same byte size + same look = same file.
         contentHash: '${asset.width}x${asset.height}:${a.bytes}:${a.dHash}',
+        entropy: a.entropy!,
+        landscape: asset.orientatedWidth > asset.orientatedHeight,
       ));
 
       // Face check missing (it failed)? Assume people are in it — never "sure".
@@ -167,8 +184,16 @@ class Scanner {
     if (thumbBytes == null) throw StateError('no thumbnail');
     final gray = await compute(decodeGray, thumbBytes);
     if (gray == null) throw StateError('could not decode thumbnail');
+
+    // Text is stored even when it turns out not to be a screenshot, so this
+    // photo is never read twice.
+    final text = _mightBeScreenshot(asset)
+        ? (await _ocr.processImage(InputImage.fromFilePath(file.path))).text
+        : null;
     return Analysis(
-      modified: modified, bytes: bytes, takenAtMs: takenAtMs, screenshot: false,
+      modified: modified, bytes: bytes, takenAtMs: takenAtMs,
+      screenshot: text != null && _looksLikeScreenshot(asset, text),
+      text: text,
       dHash: dHash(gray), sharpness: bestTileSharpness(gray), entropy: entropy(gray),
     );
   }
@@ -179,11 +204,33 @@ class Scanner {
     return (await _faces.processImage(InputImage.fromFilePath(file.path))).length;
   }
 
+  /// Taken with this phone's screenshot button.
   bool _isScreenshot(AssetEntity a) {
     final path = (a.relativePath ?? '').toLowerCase();
     final name = (a.title ?? '').toLowerCase();
     return path.contains('screenshot') || name.startsWith('screenshot');
   }
+
+  /// Could be a screenshot that arrived another way — received on WhatsApp,
+  /// saved from Instagram, downloaded. Worth reading its text to decide.
+  bool _mightBeScreenshot(AssetEntity a) {
+    final path = (a.relativePath ?? '').toLowerCase();
+    if (path.contains('dcim/camera')) return false;
+    return _isPhoneScreenShaped(a) ||
+        const ['whatsapp', 'telegram', 'instagram', 'download', 'snapchat', 'facebook']
+            .any(path.contains);
+  }
+
+  /// Phone screens are much taller than camera photos (≈ 20:9 vs 4:3 or 16:9).
+  bool _isPhoneScreenShaped(AssetEntity a) {
+    final w = a.orientatedWidth, h = a.orientatedHeight;
+    return w > 0 && h / w >= 1.9;
+  }
+
+  /// Decides if a non-folder image is really a screenshot, from its shape and
+  /// how much text it has.
+  bool _looksLikeScreenshot(AssetEntity a, String text) =>
+      _isPhoneScreenShaped(a) || text.replaceAll(RegExp(r'\s'), '').length >= 60;
 
   void dispose() {
     _ocr.close();

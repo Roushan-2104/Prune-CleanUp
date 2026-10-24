@@ -62,6 +62,8 @@ class PhotoFingerprint {
     required this.sharpness,
     required this.bytes,
     this.contentHash,
+    this.entropy = 8,
+    this.landscape = false,
   });
 
   final String id;
@@ -72,6 +74,12 @@ class PhotoFingerprint {
 
   /// Hash of the file's bytes; equal means byte-for-byte identical.
   final String? contentHash;
+
+  /// Detail level (see [entropy] in image_metrics). Plain photos — sky,
+  /// walls, dark shots — get look-alike fingerprints even when different.
+  final double entropy;
+
+  final bool landscape;
 }
 
 /// A set of duplicate/similar photos. [keep] is the best one; [others] are
@@ -84,59 +92,65 @@ class DuplicateGroup {
 
 /// Groups exact and near-duplicate photos and picks the best of each group.
 ///
-/// Near-duplicates must be visually almost identical ([maxDistance] bits of
-/// dHash) and, unless they're extremely close, taken within [burstWindow] of
-/// each other — so two similar sunsets from different days are left alone.
+/// The best photos claim their copies first, and every copy must match the
+/// kept photo *directly* — no chains where A≈B and B≈C drag a different-looking
+/// C into A's group.
+///
+/// - Exact copies (same size, dimensions and look): always grouped.
+/// - "Sure" near-copies: at most [nearIdentical] bits apart AND taken within
+///   [burstWindow] of each other.
+/// - "Maybe": nearly identical but taken at different times (e.g. a forwarded
+///   copy), or a bit less alike but taken moments apart.
+/// Portraits never match landscapes, and plain low-detail photos are skipped.
 List<DuplicateGroup> findDuplicates(
   List<PhotoFingerprint> photos, {
-  int nearIdentical = 3,
-  int maxDistance = 8,
-  Duration burstWindow = const Duration(minutes: 2),
+  int nearIdentical = 2,
+  int maxDistance = 6,
+  Duration burstWindow = const Duration(seconds: 60),
+  double minEntropy = 4,
 }) {
-  final sorted = [...photos]..sort((a, b) => a.takenAt.compareTo(b.takenAt));
-  final parent = List<int>.generate(sorted.length, (i) => i);
-  int find(int i) => parent[i] == i ? i : parent[i] = find(parent[i]);
-  void union(int a, int b) => parent[find(a)] = find(b);
+  final ordered = [...photos]..sort((a, b) =>
+      b.sharpness != a.sharpness ? b.sharpness.compareTo(a.sharpness) : b.bytes.compareTo(a.bytes));
+  final taken = List<bool>.filled(ordered.length, false);
+  final groups = <DuplicateGroup>[];
 
-  for (var i = 0; i < sorted.length; i++) {
-    for (var j = i + 1; j < sorted.length; j++) {
-      final a = sorted[i], b = sorted[j];
-      final inBurst = b.takenAt.difference(a.takenAt) <= burstWindow;
-      final sameBytes = a.contentHash != null && a.contentHash == b.contentHash;
-      final d = hammingDistance(a.dHash, b.dHash);
-      if (sameBytes || d <= nearIdentical || (inBurst && d <= maxDistance)) {
-        union(i, j);
-      }
+  for (var k = 0; k < ordered.length; k++) {
+    if (taken[k]) continue;
+    final keep = ordered[k];
+    final others = <PhotoFingerprint, Verdict>{};
+    for (var j = k + 1; j < ordered.length; j++) {
+      if (taken[j]) continue;
+      final v = _compare(keep, ordered[j], nearIdentical, maxDistance, burstWindow, minEntropy);
+      if (v == null) continue;
+      others[ordered[j]] = v;
+      taken[j] = true;
+    }
+    if (others.isNotEmpty) {
+      taken[k] = true;
+      groups.add(DuplicateGroup(keep, others));
     }
   }
-
-  final groups = <int, List<PhotoFingerprint>>{};
-  for (var i = 0; i < sorted.length; i++) {
-    groups.putIfAbsent(find(i), () => []).add(sorted[i]);
-  }
-
-  return [
-    for (final members in groups.values.where((g) => g.length > 1))
-      _toGroup(members, nearIdentical),
-  ];
+  return groups;
 }
 
-DuplicateGroup _toGroup(List<PhotoFingerprint> members, int nearIdentical) {
-  final keep = members.reduce((best, p) =>
-      p.sharpness > best.sharpness || (p.sharpness == best.sharpness && p.bytes > best.bytes)
-          ? p
-          : best);
-  final others = <PhotoFingerprint, Verdict>{};
-  for (final p in members) {
-    if (identical(p, keep)) continue;
-    if (p.contentHash != null && p.contentHash == keep.contentHash) {
-      others[p] = const Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of another photo']);
-    } else {
-      final d = hammingDistance(p.dHash, keep.dHash);
-      others[p] = d <= nearIdentical
-          ? const Verdict(JunkCategory.nearDuplicate, 0.9, ['Almost identical to a sharper photo'])
-          : const Verdict(JunkCategory.nearDuplicate, 0.7, ['Similar to a sharper photo taken moments apart']);
-    }
+Verdict? _compare(PhotoFingerprint keep, PhotoFingerprint p, int nearIdentical, int maxDistance,
+    Duration burstWindow, double minEntropy) {
+  if (p.contentHash != null && p.contentHash == keep.contentHash) {
+    return const Verdict(JunkCategory.exactDuplicate, 0.99, ['Exact copy of another photo']);
   }
-  return DuplicateGroup(keep, others);
+  if (p.landscape != keep.landscape) return null;
+  if (p.entropy < minEntropy || keep.entropy < minEntropy) return null;
+
+  final d = hammingDistance(p.dHash, keep.dHash);
+  final inBurst = p.takenAt.difference(keep.takenAt).abs() <= burstWindow;
+  if (d <= nearIdentical && inBurst) {
+    return const Verdict(JunkCategory.nearDuplicate, 0.9, ['Almost identical, taken seconds apart']);
+  }
+  if (d <= nearIdentical) {
+    return const Verdict(JunkCategory.nearDuplicate, 0.7, ['Looks almost identical to another photo']);
+  }
+  if (inBurst && d <= maxDistance) {
+    return const Verdict(JunkCategory.nearDuplicate, 0.65, ['Similar to a sharper photo taken moments apart']);
+  }
+  return null;
 }

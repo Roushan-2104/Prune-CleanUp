@@ -93,10 +93,10 @@ void main() {
   group('duplicates', () {
     final t0 = DateTime(2026, 10, 1, 10);
     PhotoFingerprint fp(String id, int hash, Duration after,
-            {double sharp = 100, String? content}) =>
+            {double sharp = 100, String? content, double entropy = 7, bool landscape = false}) =>
         PhotoFingerprint(
             id: id, takenAt: t0.add(after), dHash: hash, sharpness: sharp,
-            bytes: 1000, contentHash: content);
+            bytes: 1000, contentHash: content, entropy: entropy, landscape: landscape);
 
     test('keeps the sharpest of a burst', () {
       final groups = findDuplicates([
@@ -121,6 +121,48 @@ void main() {
       final groups = findDuplicates([
         fp('a', 0x00FF, Duration.zero),
         fp('b', 0x00FF ^ 0x3F, const Duration(days: 3)), // 6 bits apart
+      ]);
+      expect(groups, isEmpty);
+    });
+
+    test('burst shots are "sure"; look-alikes from another day only "maybe"', () {
+      final burst = findDuplicates([
+        fp('a', 0xF0F0, Duration.zero, sharp: 200),
+        fp('b', 0xF0F1, const Duration(seconds: 3)),
+      ]);
+      expect(burst.single.others.values.single.tier, Tier.sure);
+
+      final later = findDuplicates([
+        fp('a', 0xF0F0, Duration.zero, sharp: 200),
+        fp('b', 0xF0F1, const Duration(days: 2)),
+      ]);
+      expect(later.single.others.values.single.tier, Tier.maybe);
+    });
+
+    test('no chains: A≈B and B≈C does not drag a different C into A\'s group', () {
+      // Each step is 4 bits; A and C are 8 bits apart — too different.
+      final groups = findDuplicates([
+        fp('a', 0x0000, Duration.zero, sharp: 300),
+        fp('b', 0x000F, const Duration(seconds: 20), sharp: 200),
+        fp('c', 0x00FF, const Duration(seconds: 40), sharp: 100),
+      ]);
+      final aGroup = groups.firstWhere((g) => g.keep.id == 'a');
+      expect(aGroup.others.keys.map((p) => p.id), ['b']);
+      expect(groups.expand((g) => g.others.keys).map((p) => p.id), isNot(contains('c')));
+    });
+
+    test('portrait never matches landscape', () {
+      final groups = findDuplicates([
+        fp('a', 0xF0F0, Duration.zero),
+        fp('b', 0xF0F0, const Duration(seconds: 1), landscape: true),
+      ]);
+      expect(groups, isEmpty);
+    });
+
+    test('plain low-detail photos are not matched', () {
+      final groups = findDuplicates([
+        fp('sky1', 0x0, Duration.zero, entropy: 2.5),
+        fp('sky2', 0x0, const Duration(seconds: 5), entropy: 2.5),
       ]);
       expect(groups, isEmpty);
     });

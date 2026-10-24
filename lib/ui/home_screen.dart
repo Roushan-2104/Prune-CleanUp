@@ -4,6 +4,7 @@ import 'package:photo_manager/photo_manager.dart';
 import '../app_state.dart';
 import '../scan/scanner.dart';
 import '../scan/verdict.dart';
+import 'accuracy_screen.dart';
 import 'category_screen.dart';
 import 'trash_screen.dart';
 
@@ -20,6 +21,12 @@ class HomeScreen extends StatelessWidget {
           icon: const Icon(Icons.delete_outline),
           onPressed: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => TrashScreen(state: state))),
+        ),
+        IconButton(
+          tooltip: 'Accuracy test',
+          icon: const Icon(Icons.fact_check_outlined),
+          onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => AccuracyScreen(state: state))),
         ),
       ]),
       body: ListenableBuilder(
