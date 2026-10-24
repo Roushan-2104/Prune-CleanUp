@@ -1,0 +1,15 @@
+name: declutter_store
+description: Declutter's local database on the laptop (SQLite).
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.0
+dependencies:
+  declutter_engine:
+    path: ../engine
+  phone_link:
+    path: ../phone_link
+  sqlite3: ^3.8.0
+dev_dependencies:
+  test: ^1.33.0
