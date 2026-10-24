@@ -21,7 +21,16 @@ const _allowed = <String>[
   'content query ',
   'dumpsys diskstats',
   'cat ', // used to stream a file's bytes *to* the laptop
+  'find ', // only with the options in _findOptions
+  'md5sum ', // fingerprints a file's content; prints a hash, changes nothing
 ];
+
+/// `find` can also delete or run other commands (-delete, -exec, …), so only
+/// these listing options are accepted. Anything else is blocked.
+const _findOptions = {
+  '-type', '-printf', '-maxdepth', '-mindepth', '-name', '-iname', '-path', '-prune', '-o', '-not', '-size',
+  '-mtime', '-xdev', '(', ')', '!',
+};
 
 /// Characters that could chain or redirect a second command (e.g. "ls; rm x",
 /// "cat a > b"). Paths are always quoted by [shellQuote], so legitimate use
@@ -35,8 +44,13 @@ void ensureReadOnly(String command) {
   if (!_allowed.any((a) => trimmed == a.trim() || trimmed.startsWith(a))) {
     throw NotReadOnlyError(command);
   }
-  if (_dangerous.hasMatch(_withoutQuotedParts(trimmed))) {
+  final unquoted = _withoutQuotedParts(trimmed);
+  if (_dangerous.hasMatch(unquoted)) {
     throw NotReadOnlyError(command);
+  }
+  if (trimmed.startsWith('find ')) {
+    final options = unquoted.split(RegExp(r'\s+')).where((t) => t.startsWith('-') || t == '(' || t == ')' || t == '!');
+    if (options.any((o) => !_findOptions.contains(o))) throw NotReadOnlyError(command);
   }
 }
 

@@ -1,7 +1,7 @@
-/// One file the phone's media index (MediaStore) knows about.
+/// One file on the phone's shared storage.
 class PhoneFile {
   const PhoneFile({
-    required this.id,
+    this.id,
     required this.path,
     required this.folder,
     required this.bytes,
@@ -13,7 +13,11 @@ class PhoneFile {
     this.durationMs,
   });
 
-  final String id;
+  /// The phone's media-list (MediaStore) id; null for files Android doesn't
+  /// list — e.g. WhatsApp's "Sent" and "Private" folders.
+  final String? id;
+
+  bool get hiddenFromMediaList => id == null;
 
   /// Full path on the phone, e.g. /storage/emulated/0/DCIM/Camera/IMG_1.jpg
   final String path;

@@ -6,7 +6,11 @@ enum JunkCategory {
   otherScreenshot('Other screenshots'),
   blurry('Blurry photos'),
   exactDuplicate('Exact duplicates'),
-  nearDuplicate('Similar photos');
+  nearDuplicate('Similar photos'),
+  whatsappSent('WhatsApp sent copies'),
+  shortClip('Accidental short clips'),
+  screenRecording('Old screen recordings'),
+  largeVideo('Very large videos');
 
   const JunkCategory(this.label);
   final String label;

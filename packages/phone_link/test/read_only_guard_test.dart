@@ -15,6 +15,11 @@ void main() {
       // Operators inside a quoted file name are just text.
       "cat '/sdcard/WhatsApp/weird; rm -rf & name.jpg'",
       "cat '/sdcard/it'\\''s a photo.jpg'",
+      r"find '/storage/emulated/0' -type f -printf '%s\t%T@\t%p\n'",
+      "find '/sdcard/WhatsApp' -maxdepth 3 -type f -name '*.mp4'",
+      // A quoted folder name that *looks* like an option is just a name.
+      "find '/sdcard/-delete' -type f",
+      "md5sum '/sdcard/a.jpg' '/sdcard/b c.pdf'",
     ]) {
       test(cmd, () => expect(() => ensureReadOnly(cmd), returnsNormally));
     }
@@ -44,6 +49,14 @@ void main() {
       'ls /sdcard\nrm /sdcard/x',
       'getprops', // not exactly an allowed verb
       '',
+      "find '/sdcard' -type f -delete",
+      "find '/sdcard' -name '*.jpg' -exec rm {} +",
+      "find '/sdcard' -execdir rm {} +",
+      "find '/sdcard' -ok rm {} +",
+      "find '/sdcard' -okdir rm {} +",
+      "find '/sdcard' -fprint /sdcard/out.txt",
+      "find /sdcard -type f -newerXY x", // not on the allow-list
+      "md5sum '/sdcard/a.jpg' > /sdcard/hashes.txt", // writing the output to the phone
     ]) {
       test(cmd.replaceAll('\n', r'\n'), () {
         expect(() => ensureReadOnly(cmd), throwsA(isA<NotReadOnlyError>()));

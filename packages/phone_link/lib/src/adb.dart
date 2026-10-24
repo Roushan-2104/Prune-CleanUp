@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'find_list.dart';
 import 'media_list.dart';
 import 'read_only_guard.dart';
 
@@ -11,6 +12,18 @@ class PhoneDisconnected implements Exception {
   final String message;
   @override
   String toString() => 'Phone disconnected: $message';
+}
+
+/// What a batch copy managed to bring over.
+class CopyReport {
+  final copied = <PhoneFile>[];
+  final failed = <PhoneFile, String>{};
+  int bytes = 0;
+
+  void _ok(PhoneFile f) {
+    copied.add(f);
+    bytes += f.bytes;
+  }
 }
 
 class PhoneDevice {
@@ -79,6 +92,133 @@ class Adb {
     final out = await shell(serial,
         'content query --uri content://media/external/file --projection ${mediaColumns.join(':')}');
     return parseMediaRows(out);
+  }
+
+  /// Every file on shared storage, including those Android's media list
+  /// hides (WhatsApp "Sent" copies, private folders…). About 15–20 s for
+  /// 60k files.
+  Future<List<PhoneFile>> listAllFiles(String serial) async {
+    final media = await listFiles(serial);
+    final found = await shell(serial, "find ${shellQuote(storageRoot)} -type f -printf '$findFormat'");
+    return mergeListings(media, parseFindRows(found));
+  }
+
+  /// Content fingerprints (MD5) computed on the phone, so exact duplicates
+  /// are found without copying anything. Returns path → hash; files that
+  /// couldn't be read are left out.
+  Future<Map<String, String>> fingerprints(String serial, List<String> paths,
+      {void Function(int done)? onProgress}) async {
+    final result = <String, String>{};
+    var batch = <String>[];
+    var length = 0, done = 0;
+
+    Future<void> flush() async {
+      if (batch.isEmpty) return;
+      final command = 'md5sum ${batch.map(shellQuote).join(' ')}';
+      ensureReadOnly(command);
+      // md5sum exits non-zero if any one file was unreadable; keep the rest.
+      final r = await Process.run(adbPath, ['-s', serial, 'shell', command], stdoutEncoding: utf8, stderrEncoding: utf8);
+      final out = r.stdout as String;
+      if (r.exitCode != 0 && out.isEmpty) throw _failure(r.stderr as String, r.exitCode);
+      for (final line in LineSplitter.split(out)) {
+        final m = RegExp(r'^([0-9a-f]{32})  (.+)$').firstMatch(line);
+        if (m != null) result[m.group(2)!] = m.group(1)!;
+      }
+      done += batch.length;
+      onProgress?.call(done);
+      batch = [];
+      length = 0;
+    }
+
+    for (final p in paths) {
+      batch.add(p);
+      length += p.length + 3;
+      if (batch.length >= 40 || length > 6000) await flush();
+    }
+    await flush();
+    return result;
+  }
+
+  /// Copies many phone files to the laptop in batches — much faster than one
+  /// at a time, since each request to the phone costs ~65 ms on its own.
+  ///
+  /// `adb pull` only reads from the phone. Each batch lands in a temporary
+  /// folder on the laptop; a file is moved to [localPathFor] only after its
+  /// size is checked, so an interrupted copy never leaves half a file in
+  /// place. Files a batch couldn't fetch (e.g. names Windows doesn't allow)
+  /// are retried one by one, then reported in [CopyReport.failed].
+  Future<CopyReport> copyManyToLaptop(String serial, List<PhoneFile> files, String Function(PhoneFile) localPathFor,
+      {void Function(int filesDone, int bytesDone)? onProgress, int maxBatch = 60}) async {
+    final report = CopyReport();
+    final staging = await Directory.systemTemp.createTemp('declutter_copy_');
+    var filesDone = 0;
+    try {
+      for (final (i, batch) in _batches(files, maxBatch).indexed) {
+        final dir = await Directory('${staging.path}${Platform.pathSeparator}$i').create();
+        final r = await Process.run(adbPath, ['-s', serial, 'pull', ...batch.map((f) => f.path), dir.path],
+            stdoutEncoding: utf8, stderrEncoding: utf8);
+        final missing = <PhoneFile>[];
+        for (final f in batch) {
+          final tmp = File('${dir.path}${Platform.pathSeparator}${f.name}');
+          if (await tmp.exists() && await tmp.length() == f.bytes) {
+            await _moveInto(tmp, localPathFor(f));
+            report._ok(f);
+          } else {
+            missing.add(f);
+          }
+        }
+        if (missing.length == batch.length && r.exitCode != 0) {
+          final e = _failure(r.stderr as String, r.exitCode);
+          if (e is PhoneDisconnected) throw e;
+        }
+        for (final f in missing) {
+          try {
+            await copyToLaptop(serial, f, localPathFor(f));
+            report._ok(f);
+          } on PhoneDisconnected {
+            rethrow;
+          } catch (e) {
+            report.failed[f] = '$e';
+          }
+        }
+        await dir.delete(recursive: true);
+        filesDone += batch.length;
+        onProgress?.call(filesDone, report.bytes);
+      }
+    } finally {
+      await staging.delete(recursive: true).catchError((_) => staging);
+    }
+    return report;
+  }
+
+  /// Splits into batches with unique file names (they all land in one
+  /// folder) and a command line well under Windows' 32k-character limit.
+  static List<List<PhoneFile>> _batches(List<PhoneFile> files, int maxBatch) {
+    final batches = <List<PhoneFile>>[];
+    var current = <PhoneFile>[], names = <String>{}, length = 0;
+    for (final f in files) {
+      if (current.length >= maxBatch || length + f.path.length > 20000 || names.contains(f.name.toLowerCase())) {
+        batches.add(current);
+        current = [];
+        names = {};
+        length = 0;
+      }
+      current.add(f);
+      names.add(f.name.toLowerCase());
+      length += f.path.length + 3;
+    }
+    if (current.isNotEmpty) batches.add(current);
+    return batches;
+  }
+
+  static Future<void> _moveInto(File from, String to) async {
+    await File(to).parent.create(recursive: true);
+    try {
+      await from.rename(to);
+    } on FileSystemException {
+      await from.copy(to); // different drive: copy, then remove the temp file
+      await from.delete();
+    }
   }
 
   /// Copies one phone file to [localPath] on the laptop.

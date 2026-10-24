@@ -1,3 +1,4 @@
+import 'package:declutter_engine/declutter_engine.dart';
 import 'package:flutter/material.dart';
 
 import 'phone_session.dart';
@@ -41,7 +42,10 @@ class HomePage extends StatelessWidget {
                       steps: ['Unlock your phone.', 'Tap "Allow" on the "Allow USB debugging?" message.',
                         'Tick "Always allow from this computer" to skip this next time.'],
                       waiting: true),
-                  LinkState.reading => const _Guide(title: 'Reading your phone…', steps: [], waiting: true),
+                  LinkState.reading => _Guide(
+                      title: 'Reading your phone…',
+                      steps: [if (session.readingStep.isNotEmpty) session.readingStep, 'Nothing on the phone is changed.'],
+                      waiting: true),
                   LinkState.error => _Guide(title: 'Something went wrong', steps: [session.error ?? 'Unknown error', 'Unplug and reconnect the phone to try again.']),
                   LinkState.ready => _Overview(session: session),
                 },
@@ -49,6 +53,58 @@ class HomePage extends StatelessWidget {
             ]),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// "Found so far" — suggestions from file facts and on-phone fingerprints.
+class _Suggestions extends StatelessWidget {
+  const _Suggestions({required this.session});
+  final PhoneSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
+    final bytesOf = {for (final f in session.summary!.files) f.path: f.bytes};
+    final rows = <(JunkCategory, int, int, int)>[]; // category, files, sure bytes, to-check bytes
+    for (final cat in JunkCategory.values) {
+      final items = session.suggestions.entries.where((e) => e.value.verdict.category == cat);
+      if (items.isEmpty) continue;
+      var sure = 0, check = 0;
+      for (final e in items) {
+        e.value.verdict.tier == Tier.sure ? sure += bytesOf[e.key]! : check += bytesOf[e.key]!;
+      }
+      rows.add((cat, items.length, sure, check));
+    }
+    final total = rows.fold(0, (s, r) => s + r.$3 + r.$4);
+    final hidden = session.summary!.hidden;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Found so far', style: t.titleMedium),
+          const SizedBox(height: 4),
+          Text(formatBytes(total), style: t.displaySmall?.copyWith(fontWeight: FontWeight.w700, color: c.primary)),
+          Text('${hidden.length} files (${formatBytes(PhoneSummary.bytes(hidden))}) are hidden from Android\'s own file '
+              'list. Declutter checked them too.', style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          for (final (cat, n, sure, check) in rows)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(cat.label),
+              subtitle: Text('$n files'),
+              trailing: Wrap(spacing: 8, children: [
+                if (sure > 0) Chip(label: Text('Sure · ${formatBytes(sure)}'), visualDensity: VisualDensity.compact),
+                if (check > 0) Chip(label: Text('To check · ${formatBytes(check)}'), visualDensity: VisualDensity.compact),
+              ]),
+            ),
+          const SizedBox(height: 4),
+          Text('Photos and screenshots are checked after copying them to this laptop (next step).',
+              style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+        ]),
       ),
     );
   }
@@ -166,6 +222,8 @@ class _Overview extends StatelessWidget {
           style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
       const SizedBox(height: 16),
       _SinceLastTime(session: session),
+      const SizedBox(height: 16),
+      _Suggestions(session: session),
       const SizedBox(height: 16),
       Row(children: [
         stat('photos', sum.photos, PhoneSummary.bytes(sum.photos), Icons.photo_outlined),

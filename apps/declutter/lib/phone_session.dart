@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:declutter_engine/declutter_engine.dart';
 import 'package:declutter_store/declutter_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:phone_link/phone_link.dart';
@@ -16,6 +17,8 @@ class PhoneSummary {
   Iterable<PhoneFile> get videos => files.where((f) => f.isVideo);
   Iterable<PhoneFile> get audio => files.where((f) => f.isAudio);
   Iterable<PhoneFile> get other => files.where((f) => !f.isImage && !f.isVideo && !f.isAudio);
+
+  Iterable<PhoneFile> get hidden => files.where((f) => f.hiddenFromMediaList);
 
   static int bytes(Iterable<PhoneFile> fs) => fs.fold(0, (s, f) => s + f.bytes);
 
@@ -61,6 +64,12 @@ class PhoneSession extends ChangeNotifier {
   InventoryDiff? sinceLastTime;
   int needAnalysis = 0;
 
+  /// What is happening while [state] is [LinkState.reading].
+  String readingStep = '';
+
+  /// Suggestions found from file facts alone (no copying yet), by path.
+  Map<String, FileVerdict> suggestions = {};
+
   Future<void> _poll() async {
     if (_busy) return;
     _busy = true;
@@ -89,8 +98,9 @@ class PhoneSession extends ChangeNotifier {
     _set(LinkState.reading);
     info = await _adb!.info(s);
     notifyListeners();
+    _step('Listing every file, including ones Android hides…');
     final sw = Stopwatch()..start();
-    final files = await _adb!.listFiles(s);
+    final files = await _adb!.listAllFiles(s);
     summary = PhoneSummary(files);
     listTime = sw.elapsed;
 
@@ -99,7 +109,25 @@ class PhoneSession extends ChangeNotifier {
     final diff = store.syncInventory(s, files);
     sinceLastTime = firstTime ? null : diff;
     needAnalysis = store.needingAnalysis(s).length;
+
+    // Exact duplicates: only same-size files need a fingerprint, and the
+    // phone computes it itself — nothing is copied.
+    final facts = [
+      for (final f in files)
+        FileFacts(path: f.path, folder: f.folder, bytes: f.bytes, mime: f.mime, modifiedSec: f.modifiedSec,
+            durationMs: f.durationMs),
+    ];
+    final candidates = sameSizeCandidates(facts);
+    _step('Checking ${candidates.length} possible duplicates on the phone…');
+    final hashes = await _adb!.fingerprints(s, [for (final c in candidates) c.path],
+        onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
+    suggestions = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
     _set(LinkState.ready);
+  }
+
+  void _step(String text) {
+    readingStep = text;
+    notifyListeners();
   }
 
   void _set(LinkState s, {bool clear = false}) {
@@ -107,6 +135,7 @@ class PhoneSession extends ChangeNotifier {
       serial = null;
       info = null;
       summary = null;
+      suggestions = {};
     }
     if (state == s && !clear) return;
     state = s;

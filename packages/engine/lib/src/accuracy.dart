@@ -27,6 +27,9 @@ enum TrueLabel {
         JunkCategory.otherScreenshot => this == otherScreenshot,
         JunkCategory.blurry => this == blurry,
         JunkCategory.exactDuplicate || JunkCategory.nearDuplicate => this == duplicate,
+        // No dedicated answer buttons for these yet: right if the user agrees it's junk.
+        JunkCategory.whatsappSent || JunkCategory.shortClip || JunkCategory.screenRecording ||
+        JunkCategory.largeVideo => isJunk,
       };
 }
 
