@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:declutter_store/declutter_store.dart';
 import 'package:flutter/material.dart';
@@ -11,9 +12,18 @@ import 'previews.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized(); // in-app video and audio playback
-  PreviewCache.clearAll(); // previews never outlive a session
+  PreviewCache.clearAll(); // previews never outlive a session…
   runApp(DeclutterApp(session: PhoneSession(Store.open(databasePath()))));
+  // …and are deleted again when the window is closed.
+  _exitListener = AppLifecycleListener(onExitRequested: () async {
+    PreviewCache.clearAll();
+    return AppExitResponse.exit;
+  });
 }
+
+// Kept so the listener lives as long as the app.
+// ignore: unused_element
+AppLifecycleListener? _exitListener;
 
 /// %APPDATA%\Declutter\declutter.db — the laptop's memory of each phone.
 String databasePath() {

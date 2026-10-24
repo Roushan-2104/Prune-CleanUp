@@ -49,12 +49,21 @@ class MediaView extends StatefulWidget {
   final double height;
 
   @override
-  State<MediaView> createState() => _MediaViewState();
+  State<MediaView> createState() => MediaViewState();
 }
 
-class _MediaViewState extends State<MediaView> {
+class MediaViewState extends State<MediaView> {
   Future<File?>? _local;
   Player? _player;
+
+  /// Why playback failed, shown on screen instead of failing silently.
+  String? error;
+
+  /// What's happening before playback starts, e.g. "Copying 12.3 MB…".
+  String? _status;
+
+  /// The active player (also read by the app's automated UI tests).
+  Player? get player => _player;
   VideoController? _video;
 
   bool get _playable => widget.file.isVideo || widget.file.isAudio;
@@ -68,9 +77,9 @@ class _MediaViewState extends State<MediaView> {
   }
 
   @override
-  void didUpdateWidget(MediaView old) {
-    super.didUpdateWidget(old);
-    if (old.file.path != widget.file.path) {
+  void didUpdateWidget(MediaView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.file.path != widget.file.path) {
       _disposePlayer();
       _local = widget.file.isImage ? widget.previews?.get(widget.file) : null;
     }
@@ -88,16 +97,68 @@ class _MediaViewState extends State<MediaView> {
     super.dispose();
   }
 
-  Future<void> _play() async {
-    setState(() => _local = widget.previews?.get(widget.file));
-    final f = await _local;
-    if (f == null || !mounted) return;
-    final player = Player();
+  /// Copies the file (asking first if it's big), then plays it.
+  Future<void> play() async {
+    final f = widget.file;
+    if (f.bytes > 200 << 20 && !await _confirmBig()) return;
     setState(() {
-      _player = player;
-      _video = widget.file.isVideo ? VideoController(player) : null;
+      error = null;
+      _status = 'Copying ${_mb(f.bytes)} from the phone…';
+      _local = widget.previews?.get(f);
     });
-    await player.open(Media(f.path));
+    final local = await _local;
+    if (!mounted) return;
+    if (local == null) {
+      setState(() {
+        _local = null;
+        _status = null;
+        error = widget.previews == null
+            ? 'Previews are unavailable for this phone.'
+            : 'Couldn\'t copy ${f.name} from the phone to play it.';
+      });
+      return;
+    }
+    try {
+      final player = Player();
+      player.stream.error.listen((e) {
+        debugPrint('[player] error for ${f.name}: $e');
+        if (mounted) setState(() => error = 'The player reported: $e');
+      });
+      player.stream.playing.listen((p) => debugPrint('[player] ${f.name} playing=$p'));
+      player.stream.duration.listen((d) => debugPrint('[player] ${f.name} duration=$d'));
+      player.stream.log.listen((l) {
+        if (l.level == 'error' || l.level == 'warn') debugPrint('[mpv ${l.level}] ${l.prefix}: ${l.text}');
+      });
+      setState(() {
+        _status = null;
+        _player = player;
+        _video = f.isVideo ? VideoController(player) : null;
+      });
+      debugPrint('[player] opening ${local.path} (${local.lengthSync()} bytes)');
+      await player.open(Media(local.uri.toString()), play: false);
+      await player.play();
+    } catch (e) {
+      debugPrint('[player] failed for ${f.name}: $e');
+      if (mounted) setState(() => error = 'Couldn\'t play ${f.name}: $e');
+    }
+  }
+
+  /// "This video is 1.2 GB. Copying it to play takes about 40 seconds."
+  Future<bool> _confirmBig() async {
+    final secs = (widget.file.bytes / (30 << 20)).ceil(); // ~30 MB/s over USB
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Play a big video?'),
+        content: Text('${widget.file.name} is ${_mb(widget.file.bytes)}. To play it, Declutter copies it from the phone '
+            'first, which takes about $secs seconds. The copy is deleted when Declutter closes.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Copy and play')),
+        ],
+      ),
+    );
+    return ok ?? false;
   }
 
   Future<void> _openInWindows() async {
@@ -113,9 +174,15 @@ class _MediaViewState extends State<MediaView> {
 
     Widget body;
     if (_player != null) {
-      body = _video != null
-          ? Video(controller: _video!)
-          : _AudioControls(player: _player!);
+      // Our own compact controls: the built-in ones don't fit narrow panels.
+      body = Column(children: [
+        Expanded(
+          child: _video != null
+              ? Video(controller: _video!, controls: NoVideoControls)
+              : Center(child: Icon(Icons.graphic_eq, size: 56, color: c.onSurfaceVariant)),
+        ),
+        PlayerBar(player: _player!),
+      ]);
     } else if (widget.file.isImage) {
       body = FutureBuilder<File?>(
         future: _local,
@@ -129,11 +196,15 @@ class _MediaViewState extends State<MediaView> {
       body = Center(
         child: _local == null
             ? FilledButton.icon(
-                onPressed: _play,
+                onPressed: play,
                 icon: const Icon(Icons.play_arrow),
                 label: Text(widget.file.isVideo ? 'Play video' : 'Play audio'),
               )
-            : const CircularProgressIndicator(),
+            : Column(mainAxisSize: MainAxisSize.min, children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(_status ?? 'Getting ready…'),
+              ]),
       );
     } else {
       body = Center(
@@ -148,28 +219,57 @@ class _MediaViewState extends State<MediaView> {
         ]),
       );
     }
+    if (error != null) {
+      body = Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.error_outline, color: c.error),
+            const SizedBox(height: 8),
+            Text(error!, textAlign: TextAlign.center, style: TextStyle(color: c.error)),
+            TextButton(onPressed: play, child: const Text('Try again')),
+          ]),
+        ),
+      );
+    }
     return Container(height: widget.height, decoration: frame, clipBehavior: Clip.antiAlias, child: body);
   }
 }
 
-class _AudioControls extends StatelessWidget {
-  const _AudioControls({required this.player});
+String _mb(int bytes) => bytes >= 1 << 30
+    ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
+    : '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
+
+/// Play/pause, a progress bar you can drag, and "0:03 / 0:15".
+class PlayerBar extends StatelessWidget {
+  const PlayerBar({super.key, required this.player});
   final Player player;
+
+  static String _t(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: StreamBuilder<bool>(
-        stream: player.stream.playing,
-        builder: (context, snap) {
-          final playing = snap.data ?? false;
-          return Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.graphic_eq, size: 48),
-            IconButton.filled(
-              iconSize: 32,
-              onPressed: player.playOrPause,
-              icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: StreamBuilder<Duration>(
+        stream: player.stream.position,
+        builder: (context, _) {
+          final s = player.state;
+          final total = s.duration.inMilliseconds;
+          return Row(children: [
+            IconButton(
+              tooltip: s.playing ? 'Pause' : 'Play',
+              onPressed: () => s.completed ? player.seek(Duration.zero).then((_) => player.play()) : player.playOrPause(),
+              icon: Icon(s.playing ? Icons.pause : Icons.play_arrow),
             ),
+            Expanded(
+              child: Slider(
+                value: total == 0 ? 0 : (s.position.inMilliseconds / total).clamp(0.0, 1.0),
+                onChanged: total == 0 ? null : (v) => player.seek(Duration(milliseconds: (v * total).round())),
+              ),
+            ),
+            Text('${_t(s.position)} / ${_t(s.duration)}', style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(width: 8),
           ]);
         },
       ),
