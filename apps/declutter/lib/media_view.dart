@@ -1,18 +1,19 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:phone_link/phone_link.dart';
 
-import 'previews.dart';
+import 'review_media.dart';
 
-/// Small square preview for list rows: the photo itself, or an icon.
-/// Photos are copied to the laptop only when their row is on screen.
+/// Small square preview for list rows: the photo itself, a frame from the
+/// video, or an icon. Fetched only when the row is on screen.
 class FileThumb extends StatelessWidget {
-  const FileThumb({super.key, required this.file, required this.previews, this.size = 56});
+  const FileThumb({super.key, required this.file, required this.media, this.size = 56});
   final PhoneFile file;
-  final PreviewCache? previews;
+  final ReviewMedia? media;
   final double size;
 
   @override
@@ -22,13 +23,28 @@ class FileThumb extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           child: Container(width: size, height: size, color: c.surfaceContainerHighest, child: child),
         );
-    if (!file.isImage || previews == null) return box(Icon(iconFor(file), color: c.onSurfaceVariant));
-    return box(FutureBuilder<File?>(
-      future: previews!.get(file),
-      builder: (context, snap) => snap.data == null
-          ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
-          : Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: (size * 2).round(), gaplessPlayback: true),
-    ));
+    final m = media;
+    if (m != null && file.isImage) {
+      return box(FutureBuilder<File?>(
+        future: m.previews.get(file),
+        builder: (context, snap) => snap.data == null
+            ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
+            : Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: (size * 2).round(), gaplessPlayback: true),
+      ));
+    }
+    if (m != null && file.isVideo) {
+      return box(FutureBuilder<Uint8List?>(
+        future: m.thumbnail(file),
+        builder: (context, snap) => Stack(fit: StackFit.expand, children: [
+          if (snap.data != null)
+            Image.memory(snap.data!, fit: BoxFit.cover, cacheWidth: (size * 2).round(), gaplessPlayback: true)
+          else
+            Icon(Icons.movie_outlined, color: c.onSurfaceVariant),
+          const Align(alignment: Alignment.bottomRight, child: Icon(Icons.play_circle, size: 18, color: Colors.white70)),
+        ]),
+      ));
+    }
+    return box(Icon(iconFor(file), color: c.onSurfaceVariant));
   }
 }
 
@@ -40,12 +56,55 @@ IconData iconFor(PhoneFile f) => f.isVideo
             ? Icons.graphic_eq
             : Icons.description_outlined;
 
+/// Five frames spread across a video, so you can often decide without
+/// pressing Play. Tap a frame to play from there.
+class Filmstrip extends StatelessWidget {
+  const Filmstrip({super.key, required this.file, required this.media, this.onTapFrame});
+  final PhoneFile file;
+  final ReviewMedia media;
+  final void Function(double fraction)? onTapFrame;
+
+  static const at = [0.05, 0.27, 0.5, 0.73, 0.95];
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return SizedBox(
+      height: 64,
+      child: FutureBuilder<List<Uint8List>>(
+        future: media.filmstrip(file),
+        builder: (context, snap) {
+          final frames = snap.data;
+          if (frames == null) {
+            return Center(child: Text('Getting frames…', style: TextStyle(color: c.onSurfaceVariant)));
+          }
+          if (frames.isEmpty) return const SizedBox.shrink();
+          return Row(children: [
+            for (final (i, frame) in frames.indexed) ...[
+              if (i > 0) const SizedBox(width: 4),
+              Expanded(
+                child: InkWell(
+                  onTap: onTapFrame == null ? null : () => onTapFrame!(at[i]),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.memory(frame, fit: BoxFit.cover, height: 64, gaplessPlayback: true),
+                  ),
+                ),
+              ),
+            ],
+          ]);
+        },
+      ),
+    );
+  }
+}
+
 /// Large view of one file: zoomable photo, playable video or audio, or a
 /// button to open other files in their usual Windows app.
 class MediaView extends StatefulWidget {
-  const MediaView({super.key, required this.file, required this.previews, this.height = 320});
+  const MediaView({super.key, required this.file, required this.media, this.height = 320});
   final PhoneFile file;
-  final PreviewCache? previews;
+  final ReviewMedia? media;
   final double height;
 
   @override
@@ -59,10 +118,9 @@ class MediaViewState extends State<MediaView> {
   /// Why playback failed, shown on screen instead of failing silently.
   String? error;
 
-  /// What's happening before playback starts, e.g. "Copying 12.3 MB…".
+  /// What's happening before playback starts, e.g. "Getting the video…".
   String? _status;
 
-  /// The active player (also read by the app's automated UI tests).
   Player? get player => _player;
   VideoController? _video;
 
@@ -71,9 +129,7 @@ class MediaViewState extends State<MediaView> {
   @override
   void initState() {
     super.initState();
-    // Photos load right away; videos, audio and documents only when asked
-    // (they can be large).
-    if (widget.file.isImage) _local = widget.previews?.get(widget.file);
+    _prepare();
   }
 
   @override
@@ -81,8 +137,17 @@ class MediaViewState extends State<MediaView> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.file.path != widget.file.path) {
       _disposePlayer();
-      _local = widget.file.isImage ? widget.previews?.get(widget.file) : null;
+      error = null;
+      _prepare();
     }
+  }
+
+  /// Photos load right away; videos and audio get their first seconds
+  /// fetched in the background so Play starts instantly.
+  void _prepare() {
+    _local = null;
+    if (widget.file.isImage) _local = widget.media?.previews.get(widget.file);
+    if (_playable) widget.media?.warmUp(widget.file);
   }
 
   void _disposePlayer() {
@@ -97,24 +162,28 @@ class MediaViewState extends State<MediaView> {
     super.dispose();
   }
 
-  /// Copies the file (asking first if it's big), then plays it.
-  Future<void> play() async {
-    final f = widget.file;
-    if (f.bytes > 200 << 20 && !await _confirmBig()) return;
+  /// Plays the file: small ones are fetched whole, big ones streamed from
+  /// the phone. [from] is a fraction of the length to start at (0–1).
+  Future<void> play({double from = 0}) async {
+    final f = widget.file, m = widget.media;
+    if (_player != null) {
+      final d = _player!.state.duration;
+      if (d > Duration.zero) await _player!.seek(d * from);
+      await _player!.play();
+      return;
+    }
     setState(() {
       error = null;
-      _status = 'Copying ${_mb(f.bytes)} from the phone…';
-      _local = widget.previews?.get(f);
+      _status = f.bytes <= ReviewMedia.smallFile ? 'Getting ${_mb(f.bytes)} from the phone…' : 'Starting the stream…';
+      _local = Future.value(null); // shows the progress state
     });
-    final local = await _local;
+    final src = m == null ? null : await m.playableSource(f);
     if (!mounted) return;
-    if (local == null) {
+    if (src == null) {
       setState(() {
         _local = null;
         _status = null;
-        error = widget.previews == null
-            ? 'Previews are unavailable for this phone.'
-            : 'Couldn\'t copy ${f.name} from the phone to play it.';
+        error = m == null ? 'Previews are unavailable for this phone.' : 'Couldn\'t get ${f.name} from the phone.';
       });
       return;
     }
@@ -125,7 +194,6 @@ class MediaViewState extends State<MediaView> {
         if (mounted) setState(() => error = 'The player reported: $e');
       });
       player.stream.playing.listen((p) => debugPrint('[player] ${f.name} playing=$p'));
-      player.stream.duration.listen((d) => debugPrint('[player] ${f.name} duration=$d'));
       player.stream.log.listen((l) {
         if (l.level == 'error' || l.level == 'warn') debugPrint('[mpv ${l.level}] ${l.prefix}: ${l.text}');
       });
@@ -134,8 +202,12 @@ class MediaViewState extends State<MediaView> {
         _player = player;
         _video = f.isVideo ? VideoController(player) : null;
       });
-      debugPrint('[player] opening ${local.path} (${local.lengthSync()} bytes)');
-      await player.open(Media(local.uri.toString()), play: false);
+      debugPrint('[player] opening ${f.bytes <= ReviewMedia.smallFile ? 'local copy' : 'stream'} of ${f.name}');
+      await player.open(Media(src), play: false);
+      if (from > 0) {
+        final d = await player.stream.duration.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 10));
+        await player.seek(d * from);
+      }
       await player.play();
     } catch (e) {
       debugPrint('[player] failed for ${f.name}: $e');
@@ -143,26 +215,8 @@ class MediaViewState extends State<MediaView> {
     }
   }
 
-  /// "This video is 1.2 GB. Copying it to play takes about 40 seconds."
-  Future<bool> _confirmBig() async {
-    final secs = (widget.file.bytes / (30 << 20)).ceil(); // ~30 MB/s over USB
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Play a big video?'),
-        content: Text('${widget.file.name} is ${_mb(widget.file.bytes)}. To play it, Declutter copies it from the phone '
-            'first, which takes about $secs seconds. The copy is deleted when Declutter closes.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Copy and play')),
-        ],
-      ),
-    );
-    return ok ?? false;
-  }
-
   Future<void> _openInWindows() async {
-    setState(() => _local = widget.previews?.get(widget.file));
+    setState(() => _local = widget.media?.previews.get(widget.file));
     final f = await _local;
     if (f != null) await Process.run('explorer.exe', [f.path]);
   }

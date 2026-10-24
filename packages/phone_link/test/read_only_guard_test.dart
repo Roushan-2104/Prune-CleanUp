@@ -20,6 +20,10 @@ void main() {
       // A quoted folder name that *looks* like an option is just a name.
       "find '/sdcard/-delete' -type f",
       "md5sum '/sdcard/a.jpg' '/sdcard/b c.pdf'",
+      "dd if='/sdcard/DCIM/Camera/VID 1.mp4' bs=262144 skip=12 count=4 status=none",
+      "dd if='/sdcard/DCIM/Camera/VID 1.mp4' bs=262144 skip=12 count=4 status=none | base64 -w 0",
+      // A hostile file name stays a harmless name inside the quotes.
+      "dd if='/sdcard/x'\\''; rm -rf /sdcard; echo '\\''y.mp4' bs=1 skip=0 count=1 status=none | base64 -w 0",
     ]) {
       test(cmd, () => expect(() => ensureReadOnly(cmd), returnsNormally));
     }
@@ -57,6 +61,14 @@ void main() {
       "find '/sdcard' -fprint /sdcard/out.txt",
       "find /sdcard -type f -newerXY x", // not on the allow-list
       "md5sum '/sdcard/a.jpg' > /sdcard/hashes.txt", // writing the output to the phone
+      "dd if='/sdcard/a.mp4' of='/sdcard/b.mp4' bs=1 skip=0 count=1 status=none", // dd writing a file
+      "dd if=/dev/zero of='/sdcard/a.jpg' bs=1 count=1", // overwrite a photo
+      "dd if='/sdcard/a.mp4' bs=65536 skip=0 count=1 status=none conv=notrunc",
+      "dd of='/sdcard/a.mp4'",
+      "dd if='/sdcard/a.mp4' bs=1 skip=0 count=1 status=none | base64 -d", // other pipes
+      "dd if='/sdcard/a.mp4' bs=1 skip=0 count=1 status=none | base64 -w 0; rm /sdcard/a.mp4",
+      "dd if='/sdcard/a.mp4' bs=1 skip=0 count=1 status=none | sh",
+      "cat /sdcard/a.mp4 | base64 -w 0 > /sdcard/b",
     ]) {
       test(cmd.replaceAll('\n', r'\n'), () {
         expect(() => ensureReadOnly(cmd), throwsA(isA<NotReadOnlyError>()));

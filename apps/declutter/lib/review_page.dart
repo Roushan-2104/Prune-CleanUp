@@ -5,7 +5,7 @@ import 'package:phone_link/phone_link.dart';
 
 import 'media_view.dart';
 import 'phone_session.dart';
-import 'previews.dart';
+import 'review_media.dart';
 
 /// The user's ticks while reviewing. "Sure" suggestions start ticked.
 class Selection extends ChangeNotifier {
@@ -43,8 +43,8 @@ class ReviewPage extends StatefulWidget {
 
 class _ReviewPageState extends State<ReviewPage> {
   late final Selection selection = Selection(widget.session.suggestions);
-  late final PreviewCache? previews =
-      widget.session.serial == null ? null : PreviewCache(widget.session.adb, widget.session.serial!);
+  late final ReviewMedia? media =
+      widget.session.serial == null ? null : ReviewMedia(widget.session.adb, widget.session.serial!);
   JunkCategory? _current;
 
   /// The item shown in the detail panel.
@@ -109,6 +109,7 @@ class _ReviewPageState extends State<ReviewPage> {
   @override
   void dispose() {
     widget.session.removeListener(_onSession);
+    media?.dispose();
     super.dispose();
   }
 
@@ -292,7 +293,7 @@ class _DuplicateGroups extends StatelessWidget {
                 contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
                 leading: Container(
                   decoration: BoxDecoration(border: Border.all(color: Colors.green, width: 2), borderRadius: BorderRadius.circular(10)),
-                  child: FileThumb(file: kept, previews: state.previews),
+                  child: FileThumb(file: kept, media: state.media),
                 ),
                 title: Text(kept.name, overflow: TextOverflow.ellipsis),
                 subtitle: Text('Keeping · ${kept.folder}'),
@@ -326,7 +327,7 @@ class _Row extends StatelessWidget {
       onTap: () => state.focus(entry.key),
       leading: Row(mainAxisSize: MainAxisSize.min, children: [
         Checkbox(value: state.selection.has(entry.key), onChanged: (_) => state.selection.toggle(entry.key)),
-        FileThumb(file: f, previews: state.previews),
+        FileThumb(file: f, media: state.media),
       ]),
       title: Row(children: [
         Flexible(child: Text(f.name, overflow: TextOverflow.ellipsis)),
@@ -383,7 +384,7 @@ class _Detail extends StatelessWidget {
             const SizedBox(height: 6),
             Container(
               decoration: BoxDecoration(border: Border.all(color: color, width: 3), borderRadius: BorderRadius.circular(12)),
-              child: MediaView(file: file, previews: state.previews, height: 240),
+              child: MediaView(file: file, media: state.media, height: 240),
             ),
             const SizedBox(height: 6),
             Text(file.name, style: t.bodySmall, overflow: TextOverflow.ellipsis),
@@ -401,7 +402,15 @@ class _Detail extends StatelessWidget {
             labelled(state.selection.has(entry.key) ? 'Removing this copy' : 'This copy (not ticked)', c.error, f),
           ])
         else ...[
-          MediaView(file: f, previews: state.previews, height: 340),
+          MediaView(key: GlobalObjectKey<MediaViewState>(f.path), file: f, media: state.media, height: 340),
+          if (f.isVideo && state.media != null) ...[
+            const SizedBox(height: 8),
+            Filmstrip(
+              file: f,
+              media: state.media!,
+              onTapFrame: (p) => GlobalObjectKey<MediaViewState>(f.path).currentState?.play(from: p),
+            ),
+          ],
           const SizedBox(height: 10),
           Text(f.name, style: t.titleMedium),
           Text(f.folder, style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
