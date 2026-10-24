@@ -1,0 +1,104 @@
+/// One file the phone's media index (MediaStore) knows about.
+class PhoneFile {
+  const PhoneFile({
+    required this.id,
+    required this.path,
+    required this.folder,
+    required this.bytes,
+    required this.mime,
+    required this.modifiedSec,
+    this.takenMs,
+    this.width,
+    this.height,
+    this.durationMs,
+  });
+
+  final String id;
+
+  /// Full path on the phone, e.g. /storage/emulated/0/DCIM/Camera/IMG_1.jpg
+  final String path;
+
+  /// Folder relative to the phone's storage, e.g. "DCIM/Camera/".
+  final String folder;
+  final int bytes;
+  final String mime;
+  final int modifiedSec;
+  final int? takenMs;
+  final int? width;
+  final int? height;
+  final int? durationMs;
+
+  String get name => path.substring(path.lastIndexOf('/') + 1);
+  bool get isImage => mime.startsWith('image/');
+  bool get isVideo => mime.startsWith('video/');
+  bool get isAudio => mime.startsWith('audio/');
+
+  @override
+  String toString() => 'PhoneFile($path, $bytes B, $mime)';
+}
+
+/// Columns requested from MediaStore, in this exact order.
+const mediaColumns = [
+  '_id', '_data', 'relative_path', '_size', 'mime_type',
+  'date_modified', 'datetaken', 'width', 'height', 'duration',
+];
+
+/// Parses the text printed by `content query` into [PhoneFile]s.
+///
+/// Each row looks like:
+///   Row: 0 _id=12, _data=/storage/.../a, b.jpg, relative_path=DCIM/, ...
+/// Values may themselves contain ", " (file names do), so each value runs
+/// until the *next known column* — not until the next comma.
+///
+/// Folders, deleted-but-pending entries and rows without a path are skipped.
+List<PhoneFile> parseMediaRows(String output) {
+  final files = <PhoneFile>[];
+  for (final line in output.split('\n')) {
+    final row = _parseRow(line.trimRight());
+    if (row == null) continue;
+    final path = row['_data'];
+    final mime = row['mime_type'];
+    if (path == null || mime == null) continue; // folders have no mime type
+
+    files.add(PhoneFile(
+      id: row['_id']!,
+      path: path,
+      folder: row['relative_path'] ?? '',
+      bytes: _int(row['_size']) ?? 0,
+      mime: mime,
+      modifiedSec: _int(row['date_modified']) ?? 0,
+      takenMs: _int(row['datetaken']),
+      width: _int(row['width']),
+      height: _int(row['height']),
+      durationMs: _int(row['duration']),
+    ));
+  }
+  return files;
+}
+
+Map<String, String?>? _parseRow(String line) {
+  final start = RegExp(r'^Row: \d+ ').firstMatch(line);
+  if (start == null) return null;
+  final body = line.substring(start.end);
+
+  final result = <String, String?>{};
+  var pos = 0;
+  for (var i = 0; i < mediaColumns.length; i++) {
+    final key = '${mediaColumns[i]}=';
+    if (!body.startsWith(key, pos)) return null; // unexpected format
+    final valueStart = pos + key.length;
+    final int valueEnd;
+    if (i + 1 < mediaColumns.length) {
+      valueEnd = body.indexOf(', ${mediaColumns[i + 1]}=', valueStart);
+      if (valueEnd < 0) return null;
+      pos = valueEnd + 2;
+    } else {
+      valueEnd = body.length;
+    }
+    final value = body.substring(valueStart, valueEnd);
+    result[mediaColumns[i]] = value == 'NULL' ? null : value;
+  }
+  return result;
+}
+
+int? _int(String? s) => s == null ? null : int.tryParse(s);
