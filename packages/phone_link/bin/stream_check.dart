@@ -39,6 +39,24 @@ Future<void> main(List<String> args) async {
     same = mine[i] == direct[i];
   }
   print('Bytes identical to a direct read: $same');
+
+  // The case that failed in the app: watch video A for a while (reading
+  // 1 MB at a time with read-ahead, like the player), then switch to B.
+  final b = videos[1];
+  s.focus(v.path);
+  var pos = 0;
+  for (var i = 0; i < 40 && pos < v.bytes; i++) {
+    await s.read(v.path, v.bytes, pos, 1 << 20);
+    pos += 1 << 20;
+    s.readAhead(v.path, v.bytes, pos, 2 << 20);
+  }
+  s.focus(b.path);
+  final sw = Stopwatch()..start();
+  await s.read(b.path, b.bytes, 0, 64 << 10);
+  print('After watching 40 MB of video A, first 64 KB of video B: ${sw.elapsedMilliseconds} ms');
+  sw.reset();
+  await s.read(b.path, b.bytes, b.bytes - (64 << 10), 64 << 10);
+  print('…and the end of video B (where its index often is): ${sw.elapsedMilliseconds} ms');
   await s.close();
   print('Nothing on the phone was changed.');
 }

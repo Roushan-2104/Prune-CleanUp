@@ -189,6 +189,7 @@ class MediaViewState extends State<MediaView> {
     }
     try {
       final player = Player();
+      await noDiskCache(player);
       player.stream.error.listen((e) {
         debugPrint('[player] error for ${f.name}: $e');
         if (mounted) setState(() => error = 'The player reported: $e');

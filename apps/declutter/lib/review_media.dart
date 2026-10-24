@@ -43,6 +43,7 @@ class ReviewMedia {
   /// the end (many phone videos keep it there) — so Play starts instantly.
   void warmUp(PhoneFile f) {
     if (!(f.isVideo || f.isAudio) || f.bytes <= smallFile) return;
+    _streamer.focus(f.path); // drop read-ahead for anything else
     _streamer.readAhead(f.path, f.bytes, 0, 2 << 20);
     _streamer.readAhead(f.path, f.bytes, max(0, f.bytes - (1 << 20)), 1 << 20);
   }
@@ -168,6 +169,7 @@ class _FrameGrabber {
     final out = <Uint8List>[];
     try {
       final player = _player ??= Player();
+      await noDiskCache(player);
       _video ??= VideoController(player);
       await player.setVolume(0);
       final src = await media.playableSource(f);
@@ -199,4 +201,11 @@ class _FrameGrabber {
     _video = null;
     _cache.clear();
   }
+}
+
+/// Streams come from memory; stop the player trying (and failing) to keep
+/// its own cache file on disk.
+Future<void> noDiskCache(Player p) async {
+  final native = p.platform;
+  if (native is NativePlayer) await native.setProperty('cache-on-disk', 'no');
 }
