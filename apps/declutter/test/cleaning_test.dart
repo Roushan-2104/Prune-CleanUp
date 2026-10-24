@@ -72,6 +72,18 @@ void main() {
       expect((await Process.run(adbPath, ['-s', emu!, 'shell', "ls '$p'"])).exitCode, isNot(0), reason: '$p gone');
     }
 
+    // Re-reading after a clean must not offer the trashed files again
+    // (they sit on disk as ".trashed-…" until Android removes them).
+    final again = await adb.listAllFiles(emu!);
+    expect(again.where((f) => f.name.startsWith('.trashed-')), isEmpty);
+    final againFacts = [
+      for (final f in again)
+        FileFacts(path: f.path, folder: f.folder, bytes: f.bytes, mime: f.mime, modifiedSec: f.modifiedSec),
+    ];
+    final againHashes = await adb.fingerprints(emu!, [for (final c in sameSizeCandidates(againFacts)) c.path]);
+    final againFound = classifyFiles(againFacts, now: DateTime.now(), contentHash: againHashes);
+    expect(againFound.keys.where((p) => p.contains('.trashed-')), isEmpty);
+
     // 3. Undo puts everything back, byte for byte.
     expect(await runner.undo(result.session), seeded.length);
     final after = {for (final f in await adb.listAllFiles(emu!)) f.path: f.bytes};

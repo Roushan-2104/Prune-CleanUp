@@ -21,6 +21,7 @@ List<PhoneFile> parseFindRows(String output) {
 
     final relative = path.substring(storageRoot.length + 1);
     final slash = relative.lastIndexOf('/');
+    if (isInPhoneTrashOrPending(relative.substring(slash + 1))) continue;
     files.add(PhoneFile(
       path: path,
       folder: slash < 0 ? '' : relative.substring(0, slash + 1),
@@ -31,6 +32,13 @@ List<PhoneFile> parseFindRows(String output) {
   }
   return files;
 }
+
+/// Android keeps files in its Trash (and half-written files) under hidden
+/// names like ".trashed-1795441376-photo.jpg" / ".pending-…". They're not
+/// phone content: Android deletes trashed files itself after 30 days, so
+/// they must never be suggested again.
+bool isInPhoneTrashOrPending(String fileName) =>
+    fileName.startsWith('.trashed-') || fileName.startsWith('.pending-');
 
 /// Everything on the phone: MediaStore's richer entries (dimensions,
 /// durations, dates taken) plus the files only `find` sees.

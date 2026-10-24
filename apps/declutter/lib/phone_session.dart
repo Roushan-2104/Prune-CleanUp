@@ -78,17 +78,27 @@ class PhoneSession extends ChangeNotifier {
   bool get isVirtual => serial != null && PhoneCleaner.isVirtualPhone(serial!);
 
   /// Shows a different connected phone.
-  void choose(String s) {
+  Future<void> choose(String s) async {
+    await _idle();
     _wanted = s;
-    serial = null; // forces a fresh read on the next poll
-    _poll();
+    serial = null; // forces a fresh read
+    await _poll();
   }
 
   /// Reads the current phone again (after a clean-up or undo).
   Future<void> rescan() async {
+    await _idle();
     _wanted = serial;
     serial = null;
     await _poll();
+  }
+
+  /// Waits for the regular 2-second check to finish, so a requested re-read
+  /// is never silently skipped.
+  Future<void> _idle() async {
+    while (_busy) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
   }
 
   Future<void> _poll() async {

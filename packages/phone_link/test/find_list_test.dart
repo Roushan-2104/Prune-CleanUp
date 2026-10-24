@@ -30,6 +30,13 @@ void main() {
     expect(merged.where((f) => f.name == 'Bill, March.pdf').single.id, '5');
   });
 
+  test('files in the phone\'s Trash or half-written are not phone content', () {
+    const trashed = '1370452\t1700000000\t/storage/emulated/0/Download/.trashed-1795441376-IMG_holiday_copy.png\n'
+        '10\t1700000000\t/storage/emulated/0/DCIM/Camera/.pending-1795441376-VID_1.mp4\n'
+        '20\t1700000000\t/storage/emulated/0/DCIM/Camera/IMG_ok.png\n';
+    expect(parseFindRows(trashed).map((f) => f.name), ['IMG_ok.png']);
+  });
+
   test('types from extensions', () {
     expect(mimeFromName('a.JPG'), 'image/jpeg');
     expect(mimeFromName('voice.opus'), 'audio/ogg');

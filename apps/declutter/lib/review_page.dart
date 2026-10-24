@@ -39,23 +39,84 @@ class ReviewPage extends StatefulWidget {
 
 class _ReviewPageState extends State<ReviewPage> {
   late final Selection selection = Selection(widget.session.suggestions);
-  late final Map<String, PhoneFile> byPath = {for (final f in widget.session.summary!.files) f.path: f};
-  late final List<JunkCategory> categories = [
-    for (final c in JunkCategory.values)
-      if (widget.session.suggestions.values.any((v) => v.verdict.category == c)) c,
-  ];
-  late JunkCategory current = categories.first;
+  JunkCategory? _current;
 
-  List<MapEntry<String, FileVerdict>> itemsIn(JunkCategory c) =>
-      widget.session.suggestions.entries.where((e) => e.value.verdict.category == c).toList()
+  // The phone is re-read after every clean-up or undo, so everything below
+  // is derived from the session's *current* data on each build.
+  PhoneSummary? _summarySeen;
+  Map<String, PhoneFile> _byPath = {};
+
+  Map<String, PhoneFile> get byPath {
+    final s = widget.session.summary;
+    if (!identical(s, _summarySeen)) {
+      _summarySeen = s;
+      _byPath = {for (final f in s?.files ?? const <PhoneFile>[]) f.path: f};
+      // Forget ticks on files that are no longer on the phone.
+      selection.picked.removeWhere((p) => !_byPath.containsKey(p));
+    }
+    return _byPath;
+  }
+
+  /// Suggestions whose file is in the current listing.
+  Iterable<MapEntry<String, FileVerdict>> get _live =>
+      widget.session.suggestions.entries.where((e) => byPath.containsKey(e.key));
+
+  List<JunkCategory> get categories => [
+        for (final c in JunkCategory.values)
+          if (_live.any((e) => e.value.verdict.category == c)) c,
+      ];
+
+  JunkCategory? get current {
+    final cats = categories;
+    if (_current == null || !cats.contains(_current)) _current = cats.firstOrNull;
+    return _current;
+  }
+
+  List<MapEntry<String, FileVerdict>> itemsIn(JunkCategory? c) =>
+      _live.where((e) => e.value.verdict.category == c).toList()
         ..sort((a, b) => byPath[b.key]!.bytes.compareTo(byPath[a.key]!.bytes));
 
   int bytesOf(Iterable<String> paths) => paths.fold(0, (s, p) => s + (byPath[p]?.bytes ?? 0));
 
-  void show(JunkCategory c) => setState(() => current = c);
+  void show(JunkCategory c) => setState(() => _current = c);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.session.addListener(_onSession);
+  }
+
+  @override
+  void dispose() {
+    widget.session.removeListener(_onSession);
+    super.dispose();
+  }
+
+  void _onSession() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.session.state != LinkState.ready) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Review suggestions')),
+        body: Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(widget.session.readingStep.isEmpty ? 'Reading the phone again…' : widget.session.readingStep),
+          ]),
+        ),
+      );
+    }
+    final current = this.current;
+    if (current == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Review suggestions')),
+        body: const Center(child: Text('Nothing left to suggest on this phone.')),
+      );
+    }
     final items = itemsIn(current);
     return CallbackShortcuts(
       bindings: {
@@ -70,7 +131,7 @@ class _ReviewPageState extends State<ReviewPage> {
           body: Row(children: [
             SizedBox(width: 300, child: _CategoryList(state: this)),
             const VerticalDivider(width: 1),
-            Expanded(child: _Items(state: this, items: items)),
+            Expanded(child: _Items(state: this, category: current, items: items)),
           ]),
           bottomNavigationBar: _CleanBar(state: this),
         ),
@@ -110,8 +171,9 @@ class _CategoryList extends StatelessWidget {
 }
 
 class _Items extends StatelessWidget {
-  const _Items({required this.state, required this.items});
+  const _Items({required this.state, required this.category, required this.items});
   final _ReviewPageState state;
+  final JunkCategory category;
   final List<MapEntry<String, FileVerdict>> items;
 
   @override
@@ -130,8 +192,8 @@ class _Items extends StatelessWidget {
             child: Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(state.current.label, style: t.titleLarge),
-                  Text(_explain(state.current), style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
+                  Text(category.label, style: t.titleLarge),
+                  Text(_explain(category), style: t.bodyMedium?.copyWith(color: c.onSurfaceVariant)),
                 ]),
               ),
               TextButton(
@@ -271,7 +333,10 @@ class _CleanBar extends StatelessWidget {
               FilledButton.icon(
                 onPressed: picked.isEmpty || state.widget.onClean == null
                     ? null
-                    : () => state.widget.onClean!([for (final p in picked) state.byPath[p]!]),
+                    : () => state.widget.onClean!([
+                          for (final p in picked)
+                            ?state.byPath[p],
+                        ]),
                 icon: const Icon(Icons.cleaning_services_outlined),
                 label: const Text('Clean…'),
               ),

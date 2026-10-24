@@ -66,7 +66,9 @@ class HomePage extends StatelessWidget {
                       steps: [if (session.readingStep.isNotEmpty) session.readingStep, 'Nothing on the phone is changed.'],
                       waiting: true),
                   LinkState.error => _Guide(title: 'Something went wrong', steps: [session.error ?? 'Unknown error', 'Unplug and reconnect the phone to try again.']),
-                  LinkState.ready => _Overview(session: session),
+                  LinkState.ready when session.info != null && session.summary != null && session.listTime != null =>
+                    _Overview(session: session),
+                  LinkState.ready => const _Guide(title: 'Reading your phone…', steps: [], waiting: true),
                 },
               ),
             ]),
@@ -92,7 +94,8 @@ class _Suggestions extends StatelessWidget {
       if (items.isEmpty) continue;
       var sure = 0, check = 0;
       for (final e in items) {
-        e.value.verdict.tier == Tier.sure ? sure += bytesOf[e.key]! : check += bytesOf[e.key]!;
+        final b = bytesOf[e.key] ?? 0;
+        e.value.verdict.tier == Tier.sure ? sure += b : check += b;
       }
       rows.add((cat, items.length, sure, check));
     }

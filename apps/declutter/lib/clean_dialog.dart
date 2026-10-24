@@ -35,15 +35,19 @@ class _CleanDialogState extends State<_CleanDialog> {
   int restored = 0;
   String? error;
 
+  // The phone this dialog was opened for — fixed, even if the app re-reads
+  // or switches phones meanwhile.
+  late final String? serial = widget.session.serial;
+  late final bool isVirtual = serial != null && PhoneCleaner.isVirtualPhone(serial!);
+
   late final runner = CleanRunner(
     store: widget.session.store,
     adb: widget.session.adb,
-    serial: widget.session.serial!,
-    phoneLabel: '${widget.session.info?.model ?? 'phone'}-${widget.session.serial}',
+    serial: serial!,
+    phoneLabel: '${widget.session.info?.model ?? 'phone'}-$serial',
   );
 
-  bool get canStart =>
-      widget.session.isVirtual && (backup || widget.plan.toDelete.isEmpty || understood);
+  bool get canStart => isVirtual && (backup || widget.plan.toDelete.isEmpty || understood);
 
   Future<void> _run() async {
     setState(() => stage = _Stage.running);
@@ -86,7 +90,7 @@ class _CleanDialogState extends State<_CleanDialog> {
         width: 520,
         child: switch (stage) {
           _Stage.confirm => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (!widget.session.isVirtual)
+              if (!isVirtual)
                 Container(
                   padding: const EdgeInsets.all(12),
                   margin: const EdgeInsets.only(bottom: 12),
