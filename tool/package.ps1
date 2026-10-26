@@ -34,3 +34,17 @@ if ($LASTEXITCODE -ne 0) { throw 'Zip failed' }
 Remove-Item -Recurse -Force $stage
 $mb = [math]::Round((Get-Item $zip).Length / 1MB, 1)
 Write-Output "Built $zip ($mb MB)"
+
+# The installer too, when Inno Setup 6 is installed.
+$iscc = @("$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe") |
+  Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($iscc) {
+  $version = ((Select-String -Path (Join-Path $app 'pubspec.yaml') -Pattern '^version:\s*([\d.]+)').Matches[0].Groups[1].Value)
+  & $iscc /Q "/DAppVersion=$version" "/DRelease=$release" (Join-Path $PSScriptRoot 'prune.iss')
+  if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
+  $setup = Join-Path $dist 'Prune-beta-Setup.exe'
+  $mb = [math]::Round((Get-Item $setup).Length / 1MB, 1)
+  Write-Output "Built $setup ($mb MB)"
+} else {
+  Write-Output 'Inno Setup 6 not found: skipped Prune-beta-Setup.exe'
+}

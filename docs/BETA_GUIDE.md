@@ -31,14 +31,20 @@ right.
 
 ## 1. Install
 
-1. Unzip `Prune-beta.zip` anywhere, for example to `Documents\Prune`.
-   Keep all the files together: the `adb` folder and `PruneVision.exe` must
-   stay next to `Prune.exe`.
-2. Double-click `Prune.exe`.
-3. Windows may say **"Windows protected your PC"**, because this test build
-   isn't signed yet. Click **More info**, then **Run anyway**.
+You need Windows 10 or 11, 64-bit. Use either file below; both hold the
+same app.
 
-Requires Windows 10 or 11, 64-bit. Nothing else needs installing.
+- **Installer (easiest):** run `Prune-beta-Setup.exe`. It installs for your
+  Windows account only, needs no administrator rights, and adds Prune to the
+  Start menu. To remove Prune, use **Settings → Apps**. Uninstalling also
+  deletes what Prune saved about your phone, but leaves your
+  **Prune Backups** folder alone.
+- **Portable:** unzip `Prune-beta.zip` anywhere and double-click
+  `Prune.exe`. Keep the files together: the `adb` folder and
+  `PruneVision.exe` must stay next to `Prune.exe`.
+
+Windows may say **"Windows protected your PC"**, because this test build
+isn't signed yet. Click **More info**, then **Run anyway**.
 
 ## 2. Connect your phone
 
