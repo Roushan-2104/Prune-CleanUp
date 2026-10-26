@@ -102,6 +102,8 @@ Send us:
 - Android phones only. iPhones can't be read this way.
 - Photos in Google Photos' cloud aren't checked, only what is stored on the
   phone itself.
+- HEIC photos (often ones sent from iPhones) are skipped unless Windows has
+  Microsoft's HEIF and HEVC extensions installed.
 - The app icon is a placeholder.
 
 ## If something goes wrong

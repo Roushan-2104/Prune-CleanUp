@@ -55,3 +55,6 @@ packages/vision_helper/bin/
 
 # Exports from the engine's analysis tools (they hold a phone's OCR text)
 packages/engine/tool/*.json
+
+# Portable beta (tool/package.ps1)
+/dist/
