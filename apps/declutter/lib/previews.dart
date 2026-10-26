@@ -33,9 +33,8 @@ class PreviewCache {
   }
 
   File _localFor(PhoneFile f) {
-    final safeName = f.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_');
     final key = f.path.hashCode.toUnsigned(32).toRadixString(16);
-    return File('${root.path}\\$serial\\${key}_$safeName');
+    return File(inside(root.path, [serial, '${key}_${f.name}']));
   }
 
   /// The local copy of [f], copying it from the phone if needed. Returns

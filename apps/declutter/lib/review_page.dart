@@ -698,7 +698,7 @@ class _GroupHeader extends StatelessWidget {
                   ],
                   Flexible(
                     child: Text(
-                      kept != null ? 'Keeping ${kept.name}' : (group ?? 'Other'),
+                      kept != null ? 'Keeping ${displayName(kept.name)}' : (group ?? 'Other'),
                       style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -884,7 +884,7 @@ class _Detail extends StatelessWidget {
             child: MediaView(file: file, media: state.media, height: 280),
           ),
           const SizedBox(height: 6),
-          Text(file.name, style: Typed.fact, overflow: TextOverflow.ellipsis),
+          Text(displayName(file.name), style: Typed.fact, overflow: TextOverflow.ellipsis),
           Text('${formatBytes(file.bytes)} · ${shortDate(file.modifiedSec)}', style: Typed.factMuted),
         ],
       ),
@@ -898,7 +898,7 @@ class _Detail extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
           children: [
             Text(
-              f.name,
+              displayName(f.name),
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               overflow: TextOverflow.ellipsis,
             ),

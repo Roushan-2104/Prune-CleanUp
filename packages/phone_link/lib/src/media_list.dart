@@ -41,10 +41,12 @@ class PhoneFile {
   String toString() => 'PhoneFile($path, $bytes B, $mime)';
 }
 
-/// Columns requested from MediaStore, in this exact order.
+/// Columns requested from MediaStore, in this exact order. The path comes
+/// last (a value runs to the end of the line) and is checked against the
+/// folder and name, so a file name can't pass itself off as another file.
 const mediaColumns = [
-  '_id', '_data', 'relative_path', '_size', 'mime_type',
-  'date_modified', 'datetaken', 'width', 'height', 'duration',
+  '_id', 'relative_path', '_size', 'mime_type',
+  'date_modified', 'datetaken', 'width', 'height', 'duration', '_display_name', '_data',
 ];
 
 /// Parses the text printed by `content query` into [PhoneFile]s.
@@ -63,6 +65,10 @@ List<PhoneFile> parseMediaRows(String output) {
     final path = row['_data'];
     final mime = row['mime_type'];
     if (path == null || mime == null) continue; // folders have no mime type
+    // The parts must agree: "/storage/emulated/0/" + folder + name == path.
+    // A crafted name (", _data=/…/other.jpg") makes them disagree.
+    final folder = row['relative_path'] ?? '', name = row['_display_name'];
+    if (name == null || path != '/storage/emulated/0/$folder$name') continue;
 
     files.add(PhoneFile(
       id: row['_id']!,
@@ -77,7 +83,13 @@ List<PhoneFile> parseMediaRows(String output) {
       durationMs: _int(row['duration']),
     ));
   }
-  return files;
+  // A path or id listed twice can only come from a forged row: drop both.
+  final paths = <String, int>{}, ids = <String, int>{};
+  for (final f in files) {
+    paths.update(f.path, (n) => n + 1, ifAbsent: () => 1);
+    ids.update(f.id!, (n) => n + 1, ifAbsent: () => 1);
+  }
+  return [for (final f in files) if (paths[f.path] == 1 && ids[f.id] == 1) f];
 }
 
 Map<String, String?>? _parseRow(String line) {

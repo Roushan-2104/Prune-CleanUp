@@ -4,20 +4,29 @@ import 'media_list.dart';
 const storageRoot = '/storage/emulated/0';
 
 /// The `-printf` format used for full listings: size, modified time, path.
-const findFormat = r'%s\t%T@\t%p\n';
+///
+/// Each record ends in NUL, the one character a file name can't contain. A
+/// newline ending would let a name like "x\n999\t1\t/…/real.jpg" forge a
+/// second record for another file.
+const findFormat = r'%s\t%T@\t%p\0';
 
-/// Parses `find -printf '%s\t%T@\t%p\n'` output into [PhoneFile]s.
+/// Parses `find -printf '%s\t%T@\t%p\0'` output into [PhoneFile]s.
 /// These files have no media-list id; their type comes from the extension.
+/// A path listed more than once can only come from a forged record, so it
+/// is left out entirely.
 List<PhoneFile> parseFindRows(String output) {
   final files = <PhoneFile>[];
-  for (final raw in output.split('\n')) {
-    final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
-    final parts = line.split('\t');
-    if (parts.length != 3) continue;
-    final bytes = int.tryParse(parts[0]);
-    final mtime = double.tryParse(parts[1]);
-    final path = parts[2];
+  final seen = <String, int>{};
+  for (var record in output.split('\x00')) {
+    if (record.startsWith('\n')) record = record.substring(1); // tolerate a trailing newline
+    // The path is last and may itself contain tabs: split at the first two only.
+    final t1 = record.indexOf('\t'), t2 = t1 < 0 ? -1 : record.indexOf('\t', t1 + 1);
+    if (t2 < 0) continue;
+    final bytes = int.tryParse(record.substring(0, t1));
+    final mtime = double.tryParse(record.substring(t1 + 1, t2));
+    final path = record.substring(t2 + 1);
     if (bytes == null || mtime == null || !path.startsWith('$storageRoot/')) continue;
+    seen.update(path, (n) => n + 1, ifAbsent: () => 1);
 
     final relative = path.substring(storageRoot.length + 1);
     final slash = relative.lastIndexOf('/');
@@ -30,7 +39,7 @@ List<PhoneFile> parseFindRows(String output) {
       modifiedSec: mtime.floor(),
     ));
   }
-  return files;
+  return [for (final f in files) if (seen[f.path] == 1) f];
 }
 
 /// Android keeps files in its Trash (and half-written files) under hidden

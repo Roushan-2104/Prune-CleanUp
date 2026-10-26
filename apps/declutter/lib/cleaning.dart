@@ -27,11 +27,38 @@ class CleanResult {
   final int bytesFreed;
 }
 
-/// %USERPROFILE%\Declutter Backups\<phone>\<path on phone>
-String backupPathFor(String phoneLabel, PhoneFile f) {
-  final home = Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path;
-  final safe = '${f.folder}${f.name}'.replaceAll(RegExp(r'[<>:"|?*]'), '_').replaceAll('/', '\\');
-  return '$home\\Declutter Backups\\$phoneLabel\\$safe';
+/// %USERPROFILE%\Declutter Backups
+String get backupRoot =>
+    '${Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path}\\Declutter Backups';
+
+/// Where each file of one clean-up is backed up:
+/// `Declutter Backups\<phone>\<date time>\<path on phone>`.
+///
+/// Every part of the phone's path (and the phone's own name) is made safe,
+/// so no file name can place a backup outside this folder. Each clean-up
+/// gets its own folder and no two files ever share a backup: names Windows
+/// treats as the same (`IMG.jpg` / `img.jpg`, `x.jpg.` / `x.jpg`) get
+/// " (2)", " (3)"… Otherwise one backup would overwrite another while both
+/// phone files were deleted.
+Map<String, String> backupPathsFor(String phoneLabel, List<PhoneFile> files, {DateTime? at}) {
+  final t = at ?? DateTime.now();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final stamp = '${t.year}-${two(t.month)}-${two(t.day)} ${two(t.hour)}.${two(t.minute)}.${two(t.second)}';
+  final used = <String>{};
+  return {
+    for (final f in files)
+      f.path: () {
+        final parts = '${f.folder}${f.name}'.split('/').where((p) => p.isNotEmpty).toList();
+        final base = inside(backupRoot, [phoneLabel, stamp, ...parts]);
+        final dot = base.lastIndexOf('.');
+        final hasExt = dot > base.lastIndexOf('\\');
+        var path = base;
+        for (var n = 2; !used.add(path.toLowerCase()) || File(path).existsSync(); n++) {
+          path = hasExt ? '${base.substring(0, dot)} ($n)${base.substring(dot)}' : '$base ($n)';
+        }
+        return path;
+      }(),
+  };
 }
 
 /// Runs a clean-up: optional backup → journal → change the phone → record.
@@ -50,16 +77,17 @@ class CleanRunner {
   late final PhoneCleaner cleaner = PhoneCleaner(adb.adbPath, serial);
 
   Future<CleanResult> run(CleanPlan plan, {required bool backup, void Function(String step, double progress)? onProgress}) async {
-    cleaner; // fail fast on the safety lock, before any copying
+    await cleaner.confirmVirtualPhone(); // fail fast on the safety lock, before any copying
     final items = [...plan.toTrash, ...plan.toDelete];
     final backups = <String, String>{};
 
     if (backup) {
       onProgress?.call('Backing up ${items.length} files to this laptop…', 0);
-      final report = await adb.copyManyToLaptop(serial, items, (f) => backupPathFor(phoneLabel, f),
+      final targets = backupPathsFor(phoneLabel, items);
+      final report = await adb.copyManyToLaptop(serial, items, (f) => targets[f.path]!,
           onProgress: (n, _) => onProgress?.call('Backing up… $n of ${items.length}', 0.5 * n / items.length));
       for (final f in report.copied) {
-        backups[f.path] = backupPathFor(phoneLabel, f);
+        backups[f.path] = targets[f.path]!;
       }
     }
 

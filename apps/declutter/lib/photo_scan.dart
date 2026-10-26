@@ -118,7 +118,8 @@ class PhotoScan extends ChangeNotifier {
     total = todo.length;
     notifyListeners();
 
-    final work = Directory('${workRoot.path}\\$serial-${DateTime.now().millisecondsSinceEpoch}');
+    // A Wi-Fi serial is "ip:port", and ':' in a folder name is an alternate data stream.
+    final work = Directory(inside(workRoot.path, ['$serial-${DateTime.now().millisecondsSinceEpoch}']));
     // Text reading is CPU-bound: 8 helpers measured fastest on a 12-thread laptop.
     final vision = Vision(exe, parallel: (Platform.numberOfProcessors - 4).clamp(2, 8), batchSize: 15);
     final batches = [for (var i = 0; i < todo.length; i += batchSize) todo.sublist(i, (i + batchSize).clamp(0, todo.length))];
@@ -150,7 +151,7 @@ class PhotoScan extends ChangeNotifier {
   }
 
   static String _local(Directory work, PhoneFile f) =>
-      '${work.path}\\${f.path.hashCode.toUnsigned(32).toRadixString(16)}_${f.name.replaceAll(RegExp(r'[<>:"/\\|?*]'), '_')}';
+      inside(work.path, ['${f.path.hashCode.toUnsigned(32).toRadixString(16)}_${f.name}']);
 
   Future<List<PhoneFile>> _copy(List<PhoneFile> batch, Directory work) async {
     final sw = Stopwatch()..start();

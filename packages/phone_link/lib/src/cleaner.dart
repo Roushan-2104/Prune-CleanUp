@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'adb.dart' show PhoneDisconnected;
 import 'media_list.dart';
 import 'read_only_guard.dart' show shellQuote;
 
@@ -31,17 +32,31 @@ class CleanError implements Exception {
 /// Safety: refuses any device that isn't a virtual phone (`emulator-…`)
 /// unless [allowRealPhone] is passed explicitly.
 class PhoneCleaner {
-  PhoneCleaner(this.adbPath, this.serial, {bool allowRealPhone = false}) {
+  PhoneCleaner(this.adbPath, this.serial, {bool allowRealPhone = false}) : _allowRealPhone = allowRealPhone {
     if (!isVirtualPhone(serial) && !allowRealPhone) throw RealPhoneLocked(serial);
   }
 
   final String adbPath;
   final String serial;
+  final bool _allowRealPhone;
 
   static bool isVirtualPhone(String serial) => serial.startsWith('emulator-');
 
+  /// A device that calls itself `emulator-…` must also be one: adb gives
+  /// that name to anything listening on local ports 5555–5585, so the name
+  /// alone isn't proof. Called before any clean-up starts.
+  Future<void> confirmVirtualPhone() async {
+    if (_allowRealPhone) return;
+    final r = await Process.run(adbPath, ['-s', serial, 'shell', 'getprop ro.kernel.qemu; getprop ro.boot.qemu'],
+        stdoutEncoding: utf8);
+    if (!(r.stdout as String).split(RegExp(r'\s+')).contains('1')) throw RealPhoneLocked(serial);
+  }
+
   /// Moves a media-listed file to the phone's Trash.
-  Future<void> moveToTrash(PhoneFile f) async => _setTrashed(_mediaId(f), true);
+  Future<void> moveToTrash(PhoneFile f) async {
+    await _checkSameFile(f);
+    await _setTrashed(_mediaId(f), true);
+  }
 
   /// Brings a file back out of the phone's Trash.
   Future<void> restoreFromTrash(PhoneFile f) async => _setTrashed(_mediaId(f), false);
@@ -50,6 +65,7 @@ class PhoneCleaner {
   /// otherwise by removing it directly.
   Future<void> deleteForever(PhoneFile f) async {
     if (f.id != null) {
+      await _checkSameFile(f);
       await _shell('content delete --uri content://media/external/file/${_mediaId(f)}');
     } else {
       await _shell('rm -- ${shellQuote(f.path)}');
@@ -70,6 +86,17 @@ class PhoneCleaner {
     return r.exitCode == 0 && int.tryParse((r.stdout as String).trim()) != null;
   }
 
+  /// Asks the phone, right before changing anything, which file this media
+  /// id belongs to. If it isn't [f] (the listing was stale or forged),
+  /// nothing is changed.
+  Future<void> _checkSameFile(PhoneFile f) async {
+    final out = await _shell('content query --uri content://media/external/file/${_mediaId(f)} --projection _data');
+    final listed = RegExp(r'_data=(.*)$', multiLine: true).firstMatch(out)?.group(1)?.trimRight();
+    if (listed != f.path) {
+      throw CleanError('${f.name}: the phone lists a different file under this id, so it was left alone');
+    }
+  }
+
   Future<void> _setTrashed(String id, bool trashed) async {
     await _shell('content update --uri content://media/external/file/$id --bind is_trashed:i:${trashed ? 1 : 0}');
   }
@@ -85,6 +112,13 @@ class PhoneCleaner {
   Future<String> _shell(String command) async {
     final r = await Process.run(adbPath, ['-s', serial, 'shell', command], stdoutEncoding: utf8, stderrEncoding: utf8);
     final out = '${r.stdout}${r.stderr}';
+    // A pulled cable isn't a failed file: the outcome is unknown and is
+    // checked on the next connection, so it must not be recorded as "failed".
+    if (r.exitCode != 0 &&
+        RegExp(r"no devices|device offline|device '.*' not found|device not found|closed|unauthorized")
+            .hasMatch(out.toLowerCase())) {
+      throw PhoneDisconnected(out.trim().split('\n').first);
+    }
     if (r.exitCode != 0 || out.contains('Error while accessing provider') || out.contains('Exception')) {
       throw CleanError(out.trim().split('\n').first);
     }

@@ -93,10 +93,11 @@ void main() {
     expect(store.opsOf(result.session).every((o) => o.state == OpState.restored), isTrue);
 
     // Laptop backups are cleaned up by the test (the app keeps them).
-    for (final f in items) {
-      final b = File(backupPathFor('virtual-test', f));
-      if (b.existsSync()) b.deleteSync();
+    for (final o in store.opsOf(result.session)) {
+      if (o.backup case final b? when File(b).existsSync()) File(b).deleteSync();
     }
+    final testFolder = Directory('$backupRoot\\virtual-test');
+    if (testFolder.existsSync()) testFolder.deleteSync(recursive: true);
   }, timeout: const Timeout(Duration(minutes: 3)));
 
   test('a real phone is refused before anything is copied or changed', () {

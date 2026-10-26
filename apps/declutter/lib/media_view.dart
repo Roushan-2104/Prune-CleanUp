@@ -102,6 +102,34 @@ class _FileThumbState extends State<FileThumb> {
   }
 }
 
+/// Files Windows would run rather than show: programs, scripts, shortcuts,
+/// installers and macro-enabled documents.
+bool isRunnable(String path) {
+  final dot = path.lastIndexOf('.');
+  final ext = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
+  return const {
+    'exe', 'com', 'scr', 'pif', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta',
+    'msi', 'msp', 'msix', 'appx', 'appinstaller', 'application', 'lnk', 'url', 'reg', 'jar', 'cpl', 'dll', 'sys',
+    'inf', 'sct', 'chm', 'gadget', 'iso', 'img', 'vhd', 'vhdx', 'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm',
+    'potm', 'ppam', 'sldm',
+  }.contains(ext);
+}
+
+/// Marks a copied file as downloaded from the internet (its
+/// Zone.Identifier, as a browser would), so Windows' own SmartScreen and
+/// Office Protected View still warn before anything in it runs.
+void markFromInternet(String path) {
+  try {
+    File('$path:Zone.Identifier').writeAsStringSync('[ZoneTransfer]\r\nZoneId=3\r\n');
+  } catch (_) {
+    // Not NTFS (e.g. a FAT USB drive): nothing to mark.
+  }
+}
+
+/// A file name as shown on screen, with invisible direction marks made
+/// visible: a name with U+202E before "fdp.exe" would otherwise display as "…exe.pdf".
+String displayName(String name) => name.replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '\uFFFD');
+
 IconData iconFor(PhoneFile f) => f.isVideo
     ? Icons.movie_outlined
     : f.isImage
@@ -279,7 +307,19 @@ class MediaViewState extends State<MediaView> {
   Future<void> _openInWindows() async {
     setState(() => _local = widget.media?.previews.get(widget.file));
     final f = await _local;
-    if (f != null) await Process.run('explorer.exe', [f.path]);
+    if (f == null) return;
+    final explorer = '${Platform.environment['SystemRoot'] ?? r'C:\Windows'}\\explorer.exe';
+    if (isRunnable(f.path)) {
+      // A program or script from the phone is never run from here: show it
+      // in its folder instead, so opening it is a deliberate choice.
+      await Process.run(explorer, ['/select,', f.path]);
+      if (mounted) {
+        setState(() => error = 'Declutter does not open programs or scripts. It is shown in its folder instead.');
+      }
+      return;
+    }
+    markFromInternet(f.path);
+    await Process.run(explorer, [f.path]);
   }
 
   @override

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'find_list.dart';
+import 'local_paths.dart';
 import 'media_list.dart';
 import 'read_only_guard.dart';
 
@@ -163,13 +164,19 @@ class Adb {
     final staging = await Directory.systemTemp.createTemp('declutter_copy_');
     var filesDone = 0;
     try {
-      for (final (i, batch) in _batches(files, maxBatch).indexed) {
+      // `adb pull` names the laptop file after the phone file, so a name like
+      // `a\..\..\x.cmd` would land outside the staging folder. Such names
+      // are never pulled in a batch; they are copied one by one to a path
+      // we build ourselves.
+      final oneByOne = [for (final f in files) if (!isSafeName(f.name)) f];
+      final batched = [for (final f in files) if (isSafeName(f.name)) f];
+      for (final (i, batch) in _batches(batched, maxBatch).indexed) {
         final dir = await Directory('${staging.path}${Platform.pathSeparator}$i').create();
         final r = await Process.run(adbPath, ['-s', serial, 'pull', ...batch.map((f) => f.path), dir.path],
             stdoutEncoding: utf8, stderrEncoding: utf8);
         final missing = <PhoneFile>[];
         for (final f in batch) {
-          final tmp = File('${dir.path}${Platform.pathSeparator}${f.name}');
+          final tmp = File(inside(dir.path, [f.name]));
           if (await tmp.exists() && await tmp.length() == f.bytes) {
             await _moveInto(tmp, localPathFor(f));
             report._ok(f);
@@ -194,6 +201,17 @@ class Adb {
         await dir.delete(recursive: true);
         filesDone += batch.length;
         onProgress?.call(filesDone, report.bytes);
+      }
+      for (final f in oneByOne) {
+        try {
+          await copyToLaptop(serial, f, localPathFor(f));
+          report._ok(f);
+        } on PhoneDisconnected {
+          rethrow;
+        } catch (e) {
+          report.failed[f] = '$e';
+        }
+        onProgress?.call(++filesDone, report.bytes);
       }
     } finally {
       await staging.delete(recursive: true).catchError((_) => staging);
