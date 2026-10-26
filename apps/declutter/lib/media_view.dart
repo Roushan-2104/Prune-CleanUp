@@ -264,7 +264,19 @@ class MediaViewState extends State<MediaView> {
       _status = f.bytes <= ReviewMedia.smallFile ? 'Getting ${_mb(f.bytes)} from the phone…' : 'Starting the stream…';
       _local = Future.value(null); // shows the progress state
     });
-    final src = m == null ? null : await m.playableSource(f);
+    final String? src;
+    try {
+      src = m == null ? null : await m.playableSource(f);
+    } on NotMedia catch (e) {
+      if (mounted) {
+        setState(() {
+          _local = null;
+          _status = null;
+          error = '$e';
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     if (src == null) {
       setState(() {

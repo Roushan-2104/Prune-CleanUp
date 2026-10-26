@@ -31,8 +31,20 @@ class ReviewMedia {
 
   /// Where the player should read [f] from: a local copy for small files,
   /// a private streaming address for big ones.
+  ///
+  /// Only files that really start like audio or video are handed to the
+  /// player (see [looksLikeMedia]); anything else throws [NotMedia].
   Future<String?> playableSource(PhoneFile f) async {
-    if (f.bytes <= smallFile) return (await previews.get(f))?.uri.toString();
+    if (f.bytes <= smallFile) {
+      final local = await previews.get(f);
+      if (local == null) return null;
+      final raf = await local.open();
+      final head = await raf.read(64).whenComplete(raf.close);
+      if (!looksLikeMedia(head)) throw NotMedia(f.name);
+      return local.uri.toString();
+    }
+    final head = await _streamer.read(f.path, f.bytes, 0, 64);
+    if (!looksLikeMedia(head)) throw NotMedia(f.name);
     return (await streamUrl(f)).toString();
   }
 
@@ -119,14 +131,45 @@ class _FrameGrabber {
   }
 }
 
+/// A file the player is not given: it doesn't start like audio or video.
+class NotMedia implements Exception {
+  NotMedia(this.name);
+  final String name;
+  @override
+  String toString() => '$name is not a real video or audio file, so Declutter won\'t play it.';
+}
+
+/// Whether [head] (a file's first bytes) starts like a real audio or video
+/// file. A text file named ".mp4" can be a playlist that makes the player
+/// fetch addresses from the internet or open other files on the laptop;
+/// those, and anything else unrecognised, are never played.
+bool looksLikeMedia(List<int> head) {
+  bool at(int offset, String magic) =>
+      head.length >= offset + magic.length &&
+      Iterable<int>.generate(magic.length).every((i) => head[offset + i] == magic.codeUnitAt(i));
+  bool bytes(List<int> magic) =>
+      head.length >= magic.length && Iterable<int>.generate(magic.length).every((i) => head[i] == magic[i]);
+  return at(4, 'ftyp') || // MP4, MOV, 3GP, M4A
+      bytes([0x1A, 0x45, 0xDF, 0xA3]) || // Matroska, WebM
+      at(0, 'RIFF') || // AVI, WAV
+      at(0, 'OggS') || // Ogg, Opus (WhatsApp voice notes)
+      at(0, 'fLaC') ||
+      at(0, '#!AMR') ||
+      at(0, 'ID3') || // MP3 with tags
+      (head.length >= 2 && head[0] == 0xFF && (head[1] & 0xE0) == 0xE0) || // MP3 / AAC frames
+      bytes([0x00, 0x00, 0x01, 0xBA]) || bytes([0x00, 0x00, 0x01, 0xB3]) || // MPEG-PS
+      (head.isNotEmpty && head[0] == 0x47); // MPEG-TS sync byte
+}
+
 /// A player for files from the phone, which are untrusted: it reads only
 /// local copies and Declutter's own 127.0.0.1 stream, and only real audio
-/// and video formats. A "video" that is really a playlist (HLS, DASH,
-/// concat) could otherwise make the player fetch URLs from the internet or
-/// read other files on the laptop.
+/// and video formats (see also [looksLikeMedia]).
 Player safePlayer() => Player(configuration: const PlayerConfiguration(protocolWhitelist: ['file', 'http', 'tcp']));
 
 /// Locks down a player made by [safePlayer] before it opens anything.
+/// (The player opens every file through a small playlist of its own, so
+/// playlists as such can't be switched off; [looksLikeMedia] keeps
+/// phone-made ones out.)
 Future<void> hardenPlayer(Player p) async {
   final native = p.platform;
   if (native is! NativePlayer) return;
@@ -134,10 +177,9 @@ Future<void> hardenPlayer(Player p) async {
     'cache-on-disk': 'no', // streams come from memory; no cache file on disk
     'ytdl': 'no', // never hand a URL to a downloader
     'load-scripts': 'no',
-    'access-references': 'no', // don't follow references to other files
-    'demuxer-lavf-o':
-        'format_whitelist=[mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpeg,mpegts,mp3,aac,ogg,flac,wav,amr,'
-            'image2,jpeg_pipe,png_pipe,webp_pipe,gif]',
+    // Both lists together: setting this replaces the player's own value.
+    'demuxer-lavf-o': 'strict=experimental,protocol_whitelist=[file,http,tcp],'
+        'format_whitelist=[mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpeg,mpegts,mp3,aac,ogg,flac,wav,amr]',
   }.entries) {
     await native.setProperty(k, v);
   }

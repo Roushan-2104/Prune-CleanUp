@@ -139,15 +139,18 @@ class _Overview extends StatelessWidget {
     ),
   );
 
-  /// Development only: DECLUTTER_OPEN=review opens Review on start, so a
-  /// screen capture can check it without driving the mouse.
+  /// Development only: DECLUTTER_OPEN=review (or review:<group>, e.g.
+  /// review:shortClip) opens Review on start, so a screen capture can check
+  /// it without driving the mouse.
   static bool _devOpened = false;
 
   @override
   Widget build(BuildContext context) {
-    if (kDebugMode && !_devOpened && Platform.environment['DECLUTTER_OPEN'] == 'review') {
+    final dev = Platform.environment['DECLUTTER_OPEN'] ?? '';
+    if (kDebugMode && !_devOpened && dev.startsWith('review')) {
       _devOpened = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _review(context));
+      final group = JunkCategory.values.where((c) => dev == 'review:${c.name}').firstOrNull;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _review(context, group));
     }
     final sum = session.summary!;
     final hidden = sum.hidden;
