@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'accuracy_page.dart';
 import 'clean_dialog.dart';
 import 'phone_session.dart';
 import 'photo_scan.dart';
@@ -151,6 +152,11 @@ class _Overview extends StatelessWidget {
       _devOpened = true;
       final group = JunkCategory.values.where((c) => dev == 'review:${c.name}').firstOrNull;
       WidgetsBinding.instance.addPostFrameCallback((_) => _review(context, group));
+    } else if (kDebugMode && !_devOpened && dev == 'accuracy') {
+      _devOpened = true;
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => Navigator.of(context).push(MaterialPageRoute(builder: (_) => AccuracyPage(session: session))),
+      );
     }
     final sum = session.summary!;
     final hidden = sum.hidden;
@@ -248,13 +254,22 @@ class _Overview extends StatelessWidget {
                 style: const TextStyle(fontSize: 12, color: Tone.muted),
               ),
               const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
-                  onPressed: () => _confirmForget(context),
-                  child: const Text('Forget this phone on this laptop…'),
-                ),
+              Row(
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => AccuracyPage(session: session)),
+                    ),
+                    child: const Text('Check Prune\'s accuracy…'),
+                  ),
+                  const SizedBox(width: 24),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
+                    onPressed: () => _confirmForget(context),
+                    child: const Text('Forget this phone on this laptop…'),
+                  ),
+                ],
               ),
             ],
           ),

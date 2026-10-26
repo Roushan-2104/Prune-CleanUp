@@ -585,7 +585,7 @@ class _Group extends StatelessWidget {
                       final List<_Entry> cards => Padding(
                         padding: const EdgeInsets.only(top: gap),
                         child: SizedBox(
-                          height: 268,
+                          height: 288,
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
@@ -794,6 +794,13 @@ class _Card extends StatelessWidget {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              child: Tooltip(
+                message: displayName(f.name),
+                child: Text(displayName(f.name), style: Typed.factBold, maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
               child: Text(shortReason(v), style: Typed.fact, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             Padding(

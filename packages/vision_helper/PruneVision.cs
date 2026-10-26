@@ -5,7 +5,7 @@
 // it runs on any Windows 10/11 PC without installing anything. See build.ps1.
 //
 // Usage:  PruneVision.exe <jobs> <list file>
-//   <jobs>       any of "ocr", "faces", "gray", comma-separated (the default)
+//   <jobs>       any of "ocr", "faces", "gray", "thumb", comma-separated (the default)
 //   <list file>  UTF-8 text file, one image per line: "path", or
 //                "jobs<TAB>path" to choose jobs for that image
 // Output (stdout, one JSON object per line):
@@ -19,6 +19,7 @@
 // programs can't reliably read the stdin pipes some callers (Dart) create.
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using Windows.Foundation;
@@ -62,7 +63,7 @@ static class Program
             string[] jobs = (tab >= 0 ? line.Substring(0, tab) : args[0]).Split(',');
             string path = tab >= 0 ? line.Substring(tab + 1) : line;
             bool doOcr = Array.IndexOf(jobs, "ocr") >= 0, doFaces = Array.IndexOf(jobs, "faces") >= 0,
-                doGray = Array.IndexOf(jobs, "gray") >= 0;
+                doGray = Array.IndexOf(jobs, "gray") >= 0, doThumb = Array.IndexOf(jobs, "thumb") >= 0;
             Trace("image: " + path);
             string reply;
             try
@@ -71,6 +72,7 @@ static class Program
                 if (doGray) sb.Append(SmallGray(path));
                 if (doOcr) sb.Append(ReadText(ocr, path));
                 if (doFaces) sb.Append(CountFaces(faces, path));
+                if (doThumb) sb.Append(Thumbnail(path));
                 reply = sb.Append(",\"ok\":true}").ToString();
             }
             catch (Exception e)
@@ -146,6 +148,215 @@ static class Program
         {
             return ",\"faces\":" + Await(detector.DetectFacesAsync(bmp)).Count;
         }
+    }
+
+    /// A picture of what a non-photo file is, so it can be recognised at a
+    /// glance: a PDF's first page, an app installer's own icon, or the
+    /// thumbnail Windows shows for it in File Explorer (Word, Excel, …),
+    /// else the icon of the app that opens it. Returns `,"thumb":"<PNG, base64>"`.
+    static string Thumbnail(string path)
+    {
+        string ext = Path.GetExtension(path).ToLowerInvariant();
+        byte[] png = null;
+        if (ext == ".pdf") png = PdfFirstPage(path);
+        else if (ext == ".apk") png = ApkIcon(path);
+        if (png == null) png = OnSta(() => ShellThumbnail(path));
+        return ",\"thumb\":\"" + Convert.ToBase64String(png) + "\"";
+    }
+
+    /// The first page, rendered by Windows' own PDF engine; null if the PDF
+    /// is locked or damaged.
+    static byte[] PdfFirstPage(string path)
+    {
+        try
+        {
+            StorageFile file = Await(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
+            Windows.Data.Pdf.PdfDocument doc = Await(Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file));
+            if (doc.PageCount == 0) return null;
+            using (Windows.Data.Pdf.PdfPage page = doc.GetPage(0))
+            using (InMemoryRandomAccessStream s = new InMemoryRandomAccessStream())
+            {
+                Windows.Data.Pdf.PdfPageRenderOptions o = new Windows.Data.Pdf.PdfPageRenderOptions();
+                o.DestinationWidth = 600; // PNG unless told otherwise
+                AwaitAction(page.RenderToStreamAsync(s, o));
+                return ReadAll(s);
+            }
+        }
+        catch (Exception e)
+        {
+            Trace("pdf: " + e.Message);
+            return null;
+        }
+    }
+
+    /// The app's launcher icon from inside an .apk (a zip): the biggest
+    /// res/…/ic_launcher*.png or .webp that isn't an adaptive-icon layer.
+    /// Null when the app keeps its icon under an unreadable (shrunk) name.
+    static byte[] ApkIcon(string path)
+    {
+        try
+        {
+            using (System.IO.Compression.ZipArchive zip = System.IO.Compression.ZipFile.OpenRead(path))
+            {
+                System.IO.Compression.ZipArchiveEntry best = null;
+                int bestRank = 0;
+                foreach (System.IO.Compression.ZipArchiveEntry e in zip.Entries)
+                {
+                    string n = e.FullName.ToLowerInvariant();
+                    if (!n.StartsWith("res/") || !(n.EndsWith(".png") || n.EndsWith(".webp"))) continue;
+                    if (e.Length > (2 << 20)) continue; // no icon is this big: never unpack it
+                    string file = n.Substring(n.LastIndexOf('/') + 1);
+                    if (!file.StartsWith("ic_launcher") && !file.StartsWith("app_icon") && !file.Contains("launcher")) continue;
+                    int rank = file.Contains("foreground") || file.Contains("background") || file.Contains("monochrome") ? 1 : 2;
+                    if (rank > bestRank || (rank == bestRank && e.Length > best.Length))
+                    {
+                        best = e;
+                        bestRank = rank;
+                    }
+                }
+                if (best == null) return null;
+                using (Stream s = best.Open())
+                using (MemoryStream m = new MemoryStream())
+                {
+                    s.CopyTo(m);
+                    return ToPng(m.ToArray());
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Trace("apk: " + e.Message);
+            return null;
+        }
+    }
+
+    /// Any image Windows can decode (PNG, WebP…) as PNG.
+    static byte[] ToPng(byte[] image)
+    {
+        using (InMemoryRandomAccessStream input = new InMemoryRandomAccessStream())
+        {
+            using (DataWriter w = new DataWriter(input.GetOutputStreamAt(0)))
+            {
+                w.WriteBytes(image);
+                Await(w.StoreAsync());
+                Await(w.FlushAsync());
+                w.DetachStream();
+            }
+            BitmapDecoder dec = Await(BitmapDecoder.CreateAsync(input));
+            using (SoftwareBitmap bmp = Await(dec.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied)))
+            using (InMemoryRandomAccessStream output = new InMemoryRandomAccessStream())
+            {
+                BitmapEncoder enc = Await(BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, output));
+                enc.SetSoftwareBitmap(bmp);
+                AwaitAction(enc.FlushAsync());
+                return ReadAll(output);
+            }
+        }
+    }
+
+    static byte[] ReadAll(IRandomAccessStream s)
+    {
+        byte[] bytes = new byte[s.Size];
+        using (DataReader r = new DataReader(s.GetInputStreamAt(0)))
+        {
+            Await(r.LoadAsync((uint)s.Size));
+            r.ReadBytes(bytes);
+        }
+        return bytes;
+    }
+
+    /// The thumbnail File Explorer shows (or the file type's icon), 256 px.
+    static byte[] ShellThumbnail(string path)
+    {
+        IShellItemImageFactory factory;
+        SHCreateItemFromParsingName(Path.GetFullPath(path), IntPtr.Zero, typeof(IShellItemImageFactory).GUID, out factory);
+        IntPtr hbm;
+        int hr = factory.GetImage(new NativeSize { cx = 256, cy = 256 }, 0, out hbm); // 0: thumbnail, else icon
+        if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+        try
+        {
+            NativeBitmap bm;
+            GetObject(hbm, Marshal.SizeOf(typeof(NativeBitmap)), out bm);
+            System.Drawing.Bitmap result;
+            if (bm.bmBitsPixel == 32 && bm.bmBits != IntPtr.Zero)
+            {
+                // Keep transparency (Image.FromHbitmap would turn it black).
+                using (System.Drawing.Bitmap view = new System.Drawing.Bitmap(bm.bmWidth, bm.bmHeight, bm.bmWidthBytes,
+                    System.Drawing.Imaging.PixelFormat.Format32bppPArgb, bm.bmBits))
+                {
+                    result = new System.Drawing.Bitmap(view);
+                }
+            }
+            else
+            {
+                result = System.Drawing.Image.FromHbitmap(hbm);
+            }
+            using (result)
+            using (MemoryStream m = new MemoryStream())
+            {
+                result.Save(m, System.Drawing.Imaging.ImageFormat.Png);
+                return m.ToArray();
+            }
+        }
+        finally
+        {
+            DeleteObject(hbm);
+        }
+    }
+
+    /// Shell thumbnail providers expect a single-threaded apartment.
+    static T OnSta<T>(Func<T> work)
+    {
+        T result = default(T);
+        Exception error = null;
+        Thread t = new Thread(() =>
+        {
+            try { result = work(); }
+            catch (Exception e) { error = e; }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
+        t.Join();
+        if (error != null) throw error;
+        return result;
+    }
+
+    [ComImport, Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IShellItemImageFactory
+    {
+        [PreserveSig] int GetImage(NativeSize size, int flags, out IntPtr phbm);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct NativeSize { public int cx, cy; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct NativeBitmap
+    {
+        public int bmType, bmWidth, bmHeight, bmWidthBytes;
+        public ushort bmPlanes, bmBitsPixel;
+        public IntPtr bmBits;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    static extern void SHCreateItemFromParsingName(string path, IntPtr bindCtx,
+        [MarshalAs(UnmanagedType.LPStruct)] Guid riid, out IShellItemImageFactory item);
+
+    [DllImport("gdi32.dll")]
+    static extern int GetObject(IntPtr h, int size, out NativeBitmap bitmap);
+
+    [DllImport("gdi32.dll")]
+    static extern bool DeleteObject(IntPtr h);
+
+    static void AwaitAction(IAsyncAction op)
+    {
+        using (ManualResetEventSlim done = new ManualResetEventSlim(false))
+        {
+            op.Completed = delegate { done.Set(); };
+            done.Wait();
+        }
+        if (op.Status == AsyncStatus.Error) throw op.ErrorCode;
+        if (op.Status == AsyncStatus.Canceled) throw new OperationCanceledException();
     }
 
     /// Decodes an image (JPEG, PNG, HEIC if the codec is installed, …),

@@ -29,11 +29,13 @@ class _FileThumbState extends State<FileThumb> {
   // request each time and made thumbnails flicker).
   Future<File?>? _image;
   Future<Uint8List?>? _frame;
+  Future<Uint8List?>? _document;
 
   void _ask() {
     final m = widget.media, f = widget.file;
     _image = m != null && f.isImage ? m.previews.get(f) : null;
     _frame = m != null && f.isVideo ? m.thumbnail(f) : null;
+    _document = m != null && isDocument(f) ? m.documentPreview(f) : null;
   }
 
   @override
@@ -99,9 +101,27 @@ class _FileThumbState extends State<FileThumb> {
         ),
       );
     }
+    if (_document case final doc?) {
+      return box(
+        FutureBuilder<Uint8List?>(
+          future: doc,
+          builder: (context, snap) => snap.data == null
+              ? Icon(iconFor(file), color: c.onSurfaceVariant)
+              : Padding(
+                  // A page or an icon: shown whole, never cropped.
+                  padding: EdgeInsets.all(fill ? 10 : 4),
+                  child: Image.memory(snap.data!, fit: BoxFit.contain, cacheWidth: cache, gaplessPlayback: true),
+                ),
+        ),
+      );
+    }
     return box(Icon(iconFor(file), color: c.onSurfaceVariant));
   }
 }
+
+/// Anything that isn't a photo, video or audio: documents, installers,
+/// archives… shown by [ReviewMedia.documentPreview].
+bool isDocument(PhoneFile f) => !f.isImage && !f.isVideo && !f.isAudio;
 
 /// Files Windows would run rather than show: programs, scripts, shortcuts,
 /// installers and macro-enabled documents.
@@ -131,13 +151,23 @@ void markFromInternet(String path) {
 /// visible: a name with U+202E before "fdp.exe" would otherwise display as "…exe.pdf".
 String displayName(String name) => name.replaceAll(RegExp(r'[\u200e\u200f\u202a-\u202e\u2066-\u2069]'), '\uFFFD');
 
-IconData iconFor(PhoneFile f) => f.isVideo
-    ? Icons.movie_outlined
-    : f.isImage
-    ? Icons.photo_outlined
-    : f.isAudio
-    ? Icons.graphic_eq
-    : Icons.description_outlined;
+/// A file's kind at a glance, while (or instead of) its preview loads.
+IconData iconFor(PhoneFile f) {
+  if (f.isVideo) return Icons.movie_outlined;
+  if (f.isImage) return Icons.photo_outlined;
+  if (f.isAudio) return Icons.graphic_eq;
+  final dot = f.name.lastIndexOf('.');
+  return switch (dot < 0 ? '' : f.name.substring(dot + 1).toLowerCase()) {
+    'apk' || 'xapk' || 'apks' => Icons.android,
+    'pdf' => Icons.picture_as_pdf_outlined,
+    'doc' || 'docx' || 'odt' || 'rtf' || 'txt' => Icons.article_outlined,
+    'xls' || 'xlsx' || 'csv' || 'ods' => Icons.table_chart_outlined,
+    'ppt' || 'pptx' || 'odp' => Icons.slideshow_outlined,
+    'zip' || 'rar' || '7z' || 'tar' || 'gz' => Icons.folder_zip_outlined,
+    'vcf' => Icons.contact_page_outlined,
+    _ => Icons.description_outlined,
+  };
+}
 
 /// Five frames spread across a video, so you can often decide without
 /// pressing Play. Tap a frame to play from there.
@@ -386,19 +416,25 @@ class MediaViewState extends State<MediaView> {
               ),
       );
     } else {
-      body = Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(iconFor(widget.file), size: 48, color: c.onSurfaceVariant),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
+      // A document or installer: its preview (first page, app icon…) large,
+      // and a way to open it properly.
+      body = Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: FileThumb(key: ValueKey(widget.file.path), file: widget.file, media: widget.media, fill: true),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: OutlinedButton.icon(
               onPressed: _openInWindows,
               icon: const Icon(Icons.open_in_new),
               label: const Text('Open in its usual app'),
             ),
-          ],
-        ),
+          ),
+        ],
       );
     }
     if (error != null) {

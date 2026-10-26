@@ -16,7 +16,7 @@ class VisionError implements Exception {
 
 /// What Windows found in one image.
 class VisionResult {
-  const VisionResult({required this.path, this.text, this.faces, this.gray, this.error});
+  const VisionResult({required this.path, this.text, this.faces, this.gray, this.thumb, this.error});
 
   final String path;
 
@@ -28,6 +28,10 @@ class VisionResult {
 
   /// A small grayscale copy (longest side 256 px), if requested.
   final SmallGray? gray;
+
+  /// A picture of what the file is (PNG): a PDF's first page, an app's
+  /// icon, or the thumbnail or type icon Windows shows for it.
+  final Uint8List? thumb;
 
   /// Why this image couldn't be read (unreadable file, unsupported format…).
   final String? error;
@@ -45,13 +49,14 @@ class SmallGray {
 
 /// What to do with one image.
 class VisionJob {
-  const VisionJob(this.path, {this.text = false, this.faces = false, this.gray = false});
+  const VisionJob(this.path, {this.text = false, this.faces = false, this.gray = false, this.thumb = false});
   final String path;
   final bool text;
   final bool faces;
   final bool gray;
+  final bool thumb;
 
-  String get jobs => [if (text) 'ocr', if (faces) 'faces', if (gray) 'gray'].join(',');
+  String get jobs => [if (text) 'ocr', if (faces) 'faces', if (gray) 'gray', if (thumb) 'thumb'].join(',');
 }
 
 /// What this PC's Windows can do.
@@ -144,7 +149,13 @@ class Vision {
   static VisionResult _parse(String path, String line) {
     final j = jsonDecode(line) as Map<String, dynamic>;
     if (j['ok'] != true) return VisionResult(path: path, error: j['error'] as String? ?? 'unknown error');
-    return VisionResult(path: path, text: j['text'] as String?, faces: j['faces'] as int?, gray: _gray(j['gray']));
+    return VisionResult(
+      path: path,
+      text: j['text'] as String?,
+      faces: j['faces'] as int?,
+      gray: _gray(j['gray']),
+      thumb: j['thumb'] is String ? base64Decode(j['thumb'] as String) : null,
+    );
   }
 
   /// Unpacks the helper's grayscale image, dropping any row padding.

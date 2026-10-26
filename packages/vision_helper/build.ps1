@@ -8,11 +8,15 @@ $out = Join-Path $PSScriptRoot 'bin'
 New-Item -ItemType Directory -Force $out | Out-Null
 
 $refs = @(
+  "$md\Windows.Data.winmd",
   "$md\Windows.Foundation.winmd",
   "$md\Windows.Globalization.winmd",
   "$md\Windows.Graphics.winmd",
   "$md\Windows.Media.winmd",
   "$md\Windows.Storage.winmd",
+  "$fw\System.Drawing.dll",
+  "$fw\System.IO.Compression.dll",
+  "$fw\System.IO.Compression.FileSystem.dll",
   "$fw\System.Runtime.dll",
   "$fw\System.Runtime.InteropServices.WindowsRuntime.dll"
 ) | ForEach-Object { "/r:$_" }

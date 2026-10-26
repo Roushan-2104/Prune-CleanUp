@@ -1,11 +1,15 @@
 import 'dart:async';
+import 'dart:io' show ZLibDecoder;
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:phone_link/phone_link.dart';
+import 'package:vision_helper/vision_helper.dart';
 
+import 'media_view.dart' show markFromInternet;
+import 'photo_scan.dart';
 import 'previews.dart';
 
 /// Everything the review screen needs to SHOW phone files, without copying
@@ -65,7 +69,119 @@ class ReviewMedia {
   /// Five frames spread across a video.
   Future<List<Uint8List>> filmstrip(PhoneFile f) => _grabber.frames(f, const [0.05, 0.27, 0.5, 0.73, 0.95]);
 
+  /// Documents bigger than this aren't copied just to show a preview.
+  static const previewLimit = 64 << 20;
+
+  final _documents = <String, Future<Uint8List?>>{};
+  final _waiting = <(String, Completer<Uint8List?>)>[];
+  Timer? _batch;
+
+  /// A picture of what a non-photo file is (PNG): a PDF's first page, an
+  /// app installer's own icon, or the thumbnail or type icon Windows shows
+  /// for it. Made by the helper program, never inside Prune itself, from a
+  /// local copy marked as downloaded from the internet.
+  Future<Uint8List?> documentPreview(PhoneFile f) => _documents[f.path] ??= () async {
+        if (f.name.toLowerCase().endsWith('.apk')) {
+          try {
+            if (await apkIcon(f) case final icon?) return icon;
+          } catch (_) {
+            // Not a readable zip: fall back to the type icon below.
+          }
+        }
+        if (f.bytes > previewLimit) return null;
+        final local = await previews.get(f);
+        if (local == null) return null;
+        markFromInternet(local.path);
+        final done = Completer<Uint8List?>();
+        _waiting.add((local.path, done));
+        // Previews asked for together (a screenful of cards) go to the helper as one batch.
+        _batch ??= Timer(const Duration(milliseconds: 150), _runBatch);
+        return done.future;
+      }();
+
+  /// An app installer's own icon, read straight from the phone without
+  /// copying the whole .apk: an .apk is a zip, so only its table of contents
+  /// (at the end) and the icon's few kilobytes are fetched. PNG or WebP.
+  Future<Uint8List?> apkIcon(PhoneFile f) async {
+    Future<ByteData> read(int offset, int length) async =>
+        ByteData.sublistView(await _streamer.read(f.path, f.bytes, offset, length));
+
+    // The zip's end record sits in the last 64 KB.
+    final tailStart = max(0, f.bytes - 66000);
+    final tail = await read(tailStart, f.bytes - tailStart);
+    var end = -1;
+    for (var i = tail.lengthInBytes - 22; i >= 0; i--) {
+      if (tail.getUint32(i, Endian.little) == 0x06054b50) {
+        end = i;
+        break;
+      }
+    }
+    if (end < 0) return null;
+    final dirSize = tail.getUint32(end + 12, Endian.little), dirAt = tail.getUint32(end + 16, Endian.little);
+    if (dirSize > (8 << 20) || dirAt + dirSize > f.bytes) return null;
+
+    // The table of contents: pick the launcher icon (not an adaptive-icon layer), biggest first.
+    final dir = await read(dirAt, dirSize);
+    ({int at, int size, int method, int packed})? best;
+    var bestRank = 0;
+    for (var p = 0; p + 46 <= dir.lengthInBytes && dir.getUint32(p, Endian.little) == 0x02014b50;) {
+      final method = dir.getUint16(p + 10, Endian.little);
+      final packed = dir.getUint32(p + 20, Endian.little), size = dir.getUint32(p + 24, Endian.little);
+      final nameLength = dir.getUint16(p + 28, Endian.little);
+      final skip = dir.getUint16(p + 30, Endian.little) + dir.getUint16(p + 32, Endian.little);
+      final at = dir.getUint32(p + 42, Endian.little);
+      final name = String.fromCharCodes(Uint8List.sublistView(dir, p + 46, p + 46 + nameLength)).toLowerCase();
+      p += 46 + nameLength + skip;
+      final file = name.substring(name.lastIndexOf('/') + 1);
+      if (!name.startsWith('res/') || !(name.endsWith('.png') || name.endsWith('.webp'))) continue;
+      if (!file.startsWith('ic_launcher') && !file.startsWith('app_icon') && !file.contains('launcher')) continue;
+      if (size > (2 << 20) || packed > (2 << 20) || (method != 0 && method != 8)) continue; // never unpack anything big
+      final rank = file.contains('foreground') || file.contains('background') || file.contains('monochrome') ? 1 : 2;
+      if (rank > bestRank || (rank == bestRank && size > best!.size)) {
+        best = (at: at, size: size, method: method, packed: packed);
+        bestRank = rank;
+      }
+    }
+    if (best == null) return null;
+
+    // The icon itself: a 30-byte header, its name and extra field, then the data.
+    final header = await read(best.at, 30);
+    if (header.getUint32(0, Endian.little) != 0x04034b50) return null;
+    final dataAt = best.at + 30 + header.getUint16(26, Endian.little) + header.getUint16(28, Endian.little);
+    final packed = Uint8List.sublistView(await read(dataAt, best.packed));
+    final data = best.method == 0 ? packed : Uint8List.fromList(ZLibDecoder(raw: true).convert(packed));
+    return data.length == best.size ? data : null;
+  }
+
+  Future<void> _runBatch() async {
+    final batch = [..._waiting];
+    _waiting.clear();
+    _batch = null;
+    final exe = PhotoScan.findVisionHelper();
+    if (exe == null) {
+      for (final (_, done) in batch) {
+        done.complete(null);
+      }
+      return;
+    }
+    try {
+      final results = await Vision(exe, parallel: 1, batchSize: batch.length)
+          .analyseEach([for (final (path, _) in batch) VisionJob(path, thumb: true)]);
+      for (final (i, (_, done)) in batch.indexed) {
+        done.complete(results[i].thumb);
+      }
+    } catch (_) {
+      for (final (_, done) in batch) {
+        if (!done.isCompleted) done.complete(null);
+      }
+    }
+  }
+
   Future<void> dispose() async {
+    _batch?.cancel();
+    for (final (_, done) in _waiting) {
+      done.complete(null);
+    }
     await _grabber.dispose();
     final server = await _server;
     await server?.close();
