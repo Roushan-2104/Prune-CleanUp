@@ -7,6 +7,19 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
+  // One Declutter at a time: a second one would wipe the first one's photo
+  // copies and previews on start while it is still using them. Starting it
+  // again just brings the open window forward.
+  HANDLE single = ::CreateMutexW(nullptr, TRUE, L"Local\\Declutter.SingleInstance");
+  if (single != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS) {
+    if (HWND open = ::FindWindowW(nullptr, L"declutter")) {
+      ::ShowWindow(open, SW_RESTORE);
+      ::SetForegroundWindow(open);
+    }
+    ::CloseHandle(single);
+    return EXIT_SUCCESS;
+  }
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
@@ -39,5 +52,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+  if (single != nullptr) ::CloseHandle(single);
   return EXIT_SUCCESS;
 }

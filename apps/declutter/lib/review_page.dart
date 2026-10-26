@@ -226,7 +226,7 @@ class _ReviewPageState extends State<ReviewPage> {
     super.initState();
     widget.session.addListener(_onSession);
     // Development only (see HomePage): show the first card's detail too.
-    if (kDebugMode && Platform.environment['DECLUTTER_OPEN'] == 'review') {
+    if (kDebugMode && (Platform.environment['DECLUTTER_OPEN'] ?? '').startsWith('review')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final first = itemsIn(current).firstOrNull;
         if (first != null) focus(first.key);

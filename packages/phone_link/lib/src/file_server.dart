@@ -64,7 +64,8 @@ class PhoneFileServer {
     }
     res.headers
       ..set(HttpHeaders.acceptRangesHeader, 'bytes')
-      ..set(HttpHeaders.contentTypeHeader, f.mime)
+      ..set(HttpHeaders.contentTypeHeader,
+            RegExp(r'^[a-z]+/[a-z0-9.+-]+$').hasMatch(f.mime) ? f.mime : 'application/octet-stream') // from the phone: never trusted as-is
       ..set(HttpHeaders.connectionHeader, 'close')
       ..contentLength = end - start + 1;
     if (req.method == 'HEAD') {

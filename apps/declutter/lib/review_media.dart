@@ -84,8 +84,8 @@ class _FrameGrabber {
   Future<List<Uint8List>> _grab(PhoneFile f, List<double> at) async {
     final out = <Uint8List>[];
     try {
-      final player = _player ??= Player();
-      await noDiskCache(player);
+      final player = _player ??= safePlayer();
+      await hardenPlayer(player);
       _video ??= VideoController(player);
       await player.setVolume(0);
       final src = await media.playableSource(f);
@@ -119,9 +119,26 @@ class _FrameGrabber {
   }
 }
 
-/// Streams come from memory; stop the player trying (and failing) to keep
-/// its own cache file on disk.
-Future<void> noDiskCache(Player p) async {
+/// A player for files from the phone, which are untrusted: it reads only
+/// local copies and Declutter's own 127.0.0.1 stream, and only real audio
+/// and video formats. A "video" that is really a playlist (HLS, DASH,
+/// concat) could otherwise make the player fetch URLs from the internet or
+/// read other files on the laptop.
+Player safePlayer() => Player(configuration: const PlayerConfiguration(protocolWhitelist: ['file', 'http', 'tcp']));
+
+/// Locks down a player made by [safePlayer] before it opens anything.
+Future<void> hardenPlayer(Player p) async {
   final native = p.platform;
-  if (native is NativePlayer) await native.setProperty('cache-on-disk', 'no');
+  if (native is! NativePlayer) return;
+  for (final MapEntry(key: k, value: v) in const {
+    'cache-on-disk': 'no', // streams come from memory; no cache file on disk
+    'ytdl': 'no', // never hand a URL to a downloader
+    'load-scripts': 'no',
+    'access-references': 'no', // don't follow references to other files
+    'demuxer-lavf-o':
+        'format_whitelist=[mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,avi,mpeg,mpegts,mp3,aac,ogg,flac,wav,amr,'
+            'image2,jpeg_pipe,png_pipe,webp_pipe,gif]',
+  }.entries) {
+    await native.setProperty(k, v);
+  }
 }

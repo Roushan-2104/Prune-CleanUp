@@ -11,5 +11,6 @@ dependencies:
   phone_link:
     path: ../phone_link
   sqlite3: ^3.8.0
+  ffi: ^2.1.0
 dev_dependencies:
   test: ^1.33.0

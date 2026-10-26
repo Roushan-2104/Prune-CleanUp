@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'dev_log.dart';
 import 'review_media.dart';
 
 /// Small square preview for list rows: the photo itself, a frame from the
@@ -274,22 +275,22 @@ class MediaViewState extends State<MediaView> {
       return;
     }
     try {
-      final player = Player();
-      await noDiskCache(player);
+      final player = safePlayer();
+      await hardenPlayer(player);
       player.stream.error.listen((e) {
-        debugPrint('[player] error for ${f.name}: $e');
+        devLog('[player] error for ${f.name}: $e');
         if (mounted) setState(() => error = 'The player reported: $e');
       });
-      player.stream.playing.listen((p) => debugPrint('[player] ${f.name} playing=$p'));
+      player.stream.playing.listen((p) => devLog('[player] ${f.name} playing=$p'));
       player.stream.log.listen((l) {
-        if (l.level == 'error' || l.level == 'warn') debugPrint('[mpv ${l.level}] ${l.prefix}: ${l.text}');
+        if (l.level == 'error' || l.level == 'warn') devLog('[mpv ${l.level}] ${l.prefix}: ${l.text}');
       });
       setState(() {
         _status = null;
         _player = player;
         _video = f.isVideo ? VideoController(player) : null;
       });
-      debugPrint('[player] opening ${f.bytes <= ReviewMedia.smallFile ? 'local copy' : 'stream'} of ${f.name}');
+      devLog('[player] opening ${f.bytes <= ReviewMedia.smallFile ? 'local copy' : 'stream'} of ${f.name}');
       await player.open(Media(src), play: false);
       if (from > 0) {
         final d = await player.stream.duration
@@ -299,7 +300,7 @@ class MediaViewState extends State<MediaView> {
       }
       await player.play();
     } catch (e) {
-      debugPrint('[player] failed for ${f.name}: $e');
+      devLog('[player] failed for ${f.name}: $e');
       if (mounted) setState(() => error = 'Couldn\'t play ${f.name}: $e');
     }
   }

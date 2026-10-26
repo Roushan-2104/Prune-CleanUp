@@ -78,6 +78,15 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
+# Declutter's text-and-face reading helper, next to Declutter.exe: the app
+# only runs the copy found there (built by packages/vision_helper/build.ps1).
+set(VISION_HELPER "${CMAKE_CURRENT_SOURCE_DIR}/../../../packages/vision_helper/bin/DeclutterVision.exe")
+if(EXISTS "${VISION_HELPER}")
+  install(FILES "${VISION_HELPER}" DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
+else()
+  message(WARNING "DeclutterVision.exe not built: run packages/vision_helper/build.ps1")
+endif()
+
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart';
 import 'package:phone_link/phone_link.dart';
 import 'package:vision_helper/vision_helper.dart';
 
+import 'dev_log.dart';
+
 /// Checks photos and screenshots on the laptop, read-only on the phone:
 /// copy a batch → read text (screenshots) and a small grayscale copy
 /// (every photo) with Windows' engines → check faces on blurry-looking ones
@@ -133,7 +135,7 @@ class PhotoScan extends ChangeNotifier {
         next = i + 1 < batches.length && !_stop ? _copy(batches[i + 1], work) : null;
         await _measure(copied, images, work, vision);
         done += batches[i].length;
-        debugPrint('photo check: $done of $total, ${batches[i].length} in ${_clock.elapsedMilliseconds - t} ms '
+        devLog('photo check: $done of $total, ${batches[i].length} in ${_clock.elapsedMilliseconds - t} ms '
             '(copy $_copyMs, read $_readMs, faces $_faceMs)');
         step = '';
         notifyListeners();
@@ -179,7 +181,7 @@ class PhotoScan extends ChangeNotifier {
         // Windows can't open it (damaged, or a format it lacks). Remembered
         // without measurements, so it is never suggested and not retried
         // until the file changes.
-        debugPrint('photo check: could not read ${f.path}: ${r.error}');
+        devLog('photo check: could not read ${f.path}: ${r.error}');
         unreadable++;
         analyses[f.path] = Analysis(modified: f.modifiedSec, bytes: f.bytes,
             takenAtMs: f.takenMs ?? f.modifiedSec * 1000, screenshot: false);
@@ -234,16 +236,22 @@ class PhotoScan extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// DeclutterVision.exe: next to Declutter when installed, or the
-  /// project's build folder during development.
+  /// DeclutterVision.exe: next to Declutter (where the build installs it).
+  ///
+  /// It is handed every photo, so it must never be a copy someone else put
+  /// somewhere: a release build accepts only the one beside Declutter.exe.
+  /// Development builds also look in this project's own checkout (the
+  /// folder with `.git`), never in any other parent folder.
   static String? findVisionHelper() {
     final exeDir = File(Platform.resolvedExecutable).parent;
     final beside = File('${exeDir.path}\\DeclutterVision.exe');
     if (beside.existsSync()) return beside.path;
+    if (kReleaseMode) return null;
     for (final start in [exeDir, Directory.current]) {
       for (Directory d = start.absolute; d.path != d.parent.path; d = d.parent) {
+        if (!Directory('${d.path}\\.git').existsSync()) continue;
         final dev = File('${d.path}\\packages\\vision_helper\\bin\\DeclutterVision.exe');
-        if (dev.existsSync()) return dev.path;
+        return dev.existsSync() ? dev.path : null;
       }
     }
     return null;

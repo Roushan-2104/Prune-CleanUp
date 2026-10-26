@@ -112,18 +112,26 @@ List<DuplicateGroup> findDuplicates(
   int maxDistance = 6,
   Duration burstWindow = const Duration(seconds: 60),
   double minEntropy = 4,
+  bool indexed = true, // false compares every pair (tests check both agree)
 }) {
   final ordered = [...photos]..sort((a, b) =>
       b.sharpness != a.sharpness ? b.sharpness.compareTo(a.sharpness) : b.bytes.compareTo(a.bytes));
   final taken = List<bool>.filled(ordered.length, false);
   final groups = <DuplicateGroup>[];
 
+  // Comparing every photo with every other is ~40 million pairs on a big
+  // phone. Instead, cut each 64-bit fingerprint into 7 pieces: two
+  // fingerprints at most 6 bits apart must agree exactly on at least one
+  // piece, so only photos sharing a piece are compared. Same result, a
+  // tiny fraction of the work.
+  final index = indexed && maxDistance < _pieces ? _PieceIndex(ordered) : null;
+
   for (var k = 0; k < ordered.length; k++) {
     if (taken[k]) continue;
     final keep = ordered[k];
     final others = <PhotoFingerprint, Verdict>{};
-    for (var j = k + 1; j < ordered.length; j++) {
-      if (taken[j]) continue;
+    for (final j in index?.candidates(k) ?? [for (var j = k + 1; j < ordered.length; j++) j]) {
+      if (j <= k || taken[j]) continue;
       final v = _compare(keep, ordered[j], nearIdentical, maxDistance, burstWindow, minEntropy);
       if (v == null) continue;
       others[ordered[j]] = v;
@@ -137,6 +145,43 @@ List<DuplicateGroup> findDuplicates(
   return groups;
 }
 
+const _pieces = 7;
+
+/// Photos by each of the 7 pieces of their fingerprint (see [findDuplicates]).
+class _PieceIndex {
+  _PieceIndex(List<PhotoFingerprint> photos) {
+    for (final (i, p) in photos.indexed) {
+      for (var piece = 0; piece < _pieces; piece++) {
+        (_byPiece[piece][_piece(p.dHash, piece)] ??= []).add(i);
+      }
+      if (p.contentHash != null) (_byContent[p.contentHash!] ??= []).add(i);
+    }
+    _hashes = [for (final p in photos) p.dHash];
+    _content = [for (final p in photos) p.contentHash];
+  }
+
+  final _byPiece = List.generate(_pieces, (_) => <int, List<int>>{});
+  final _byContent = <String, List<int>>{};
+  late final List<int> _hashes;
+  late final List<String?> _content;
+
+  static int _piece(int hash, int piece) {
+    final from = piece * 64 ~/ _pieces, to = (piece + 1) * 64 ~/ _pieces;
+    return (hash >>> from) & ((1 << (to - from)) - 1);
+  }
+
+  /// Every photo that could be within the distance limit of photo [k] (or
+  /// is an exact copy of it), in the order of the list.
+  Iterable<int> candidates(int k) {
+    final found = <int>{};
+    for (var piece = 0; piece < _pieces; piece++) {
+      found.addAll(_byPiece[piece][_piece(_hashes[k], piece)]!);
+    }
+    if (_content[k] case final c?) found.addAll(_byContent[c]!);
+    return found.toList()..sort();
+  }
+}
+
 Verdict? _compare(PhotoFingerprint keep, PhotoFingerprint p, int nearIdentical, int maxDistance,
     Duration burstWindow, double minEntropy) {
   if (p.contentHash != null && p.contentHash == keep.contentHash) {
@@ -148,9 +193,12 @@ Verdict? _compare(PhotoFingerprint keep, PhotoFingerprint p, int nearIdentical, 
   if (p.landscape != keep.landscape) return null;
   if (p.entropy < minEntropy || keep.entropy < minEntropy) return null;
 
+  // Cheap checks first; the evidence text is only written for a match.
   final d = hammingDistance(p.dHash, keep.dHash);
+  if (d > maxDistance) return null;
   final apart = p.takenAt.difference(keep.takenAt).abs();
   final inBurst = apart <= burstWindow;
+  if (d > nearIdentical && !inBurst) return null;
   final evidence = {
     'Looks alike': d == 0 ? 'Visual fingerprints identical' : 'Visual fingerprints differ in $d of 64 points',
     'Taken': inBurst ? '${apart.inSeconds} s apart' : '${_day(keep.takenAt)} and ${_day(p.takenAt)}',
@@ -162,10 +210,7 @@ Verdict? _compare(PhotoFingerprint keep, PhotoFingerprint p, int nearIdentical, 
   if (d <= nearIdentical) {
     return Verdict(JunkCategory.nearDuplicate, 0.7, ['Looks almost identical to another photo'], evidence: evidence);
   }
-  if (inBurst && d <= maxDistance) {
-    return Verdict(JunkCategory.nearDuplicate, 0.65, ['Similar to a sharper photo taken moments apart'], evidence: evidence);
-  }
-  return null;
+  return Verdict(JunkCategory.nearDuplicate, 0.65, ['Similar to a sharper photo taken moments apart'], evidence: evidence);
 }
 
 String _whyKeptPhoto(PhotoFingerprint keep, PhotoFingerprint p) => keep.sharpness > p.sharpness

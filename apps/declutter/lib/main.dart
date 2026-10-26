@@ -31,11 +31,29 @@ void main() {
 // ignore: unused_element
 AppLifecycleListener? _exitListener;
 
-/// %APPDATA%\Declutter\declutter.db — the laptop's memory of each phone.
+/// %LOCALAPPDATA%\Declutter\declutter.db — the laptop's memory of each phone.
+///
+/// Local, not Roaming: on work and school PCs Roaming AppData is copied to a
+/// server at sign-out, and this file describes what's on a personal phone.
+/// A database left in the old Roaming place is moved here once.
 String databasePath() {
-  final base = Platform.environment['APPDATA'] ?? Directory.systemTemp.path;
-  final dir = Directory('$base\\Declutter')..createSync(recursive: true);
-  return '${dir.path}\\declutter.db';
+  final local = Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
+  final dir = Directory('$local\\Declutter')..createSync(recursive: true);
+  final path = '${dir.path}\\declutter.db';
+  final roaming = Platform.environment['APPDATA'];
+  if (roaming != null && !File(path).existsSync()) {
+    final old = '$roaming\\Declutter\\declutter.db';
+    try {
+      for (final suffix in ['', '-wal', '-shm']) {
+        if (File('$old$suffix').existsSync()) File('$old$suffix').renameSync('$path$suffix');
+      }
+      final oldDir = Directory('$roaming\\Declutter');
+      if (oldDir.existsSync() && oldDir.listSync().isEmpty) oldDir.deleteSync();
+    } on FileSystemException {
+      // Different drive or in use: start fresh here; the old one is left as it was.
+    }
+  }
+  return path;
 }
 
 class DeclutterApp extends StatelessWidget {

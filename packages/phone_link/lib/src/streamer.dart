@@ -168,22 +168,28 @@ class PhoneStreamer {
     if (expected <= 0) return Uint8List(0);
     // Encoded as one line of base64 on the phone: Windows' adb inserts bytes
     // into raw binary over a long-lived connection (CR before every LF).
-    final command = 'dd if=${shellQuote(path)} bs=$blockSize skip=$skip count=$count status=none | base64 -w 0';
+    // "; echo" ends every answer with a newline, so each read takes exactly
+    // its own answer — even when the file has grown since it was listed and
+    // the phone sends more than expected.
+    final command = 'dd if=${shellQuote(path)} bs=$blockSize skip=$skip count=$count status=none | base64 -w 0; echo';
     ensureReadOnly(command);
-    final textLength = 4 * ((expected + 2) ~/ 3);
 
     final shell = await _connection();
     shell.stdin.writeln(command);
     try {
-      final text = await _take(textLength).timeout(const Duration(seconds: 15));
-      final bytes = base64Decode(String.fromCharCodes(text));
-      if (bytes.length != expected) throw FileSystemException('Unexpected length from the phone', path);
-      return bytes;
+      final text = await _takeLine().timeout(const Duration(seconds: 15));
+      final bytes = base64Decode(String.fromCharCodes(text).trim());
+      if (bytes.length < expected) throw FileSystemException('Unexpected length from the phone', path);
+      return bytes.length == expected ? bytes : Uint8List.sublistView(bytes, 0, expected);
     } on TimeoutException {
       _restart(); // the phone didn't answer (file gone, cable pulled): start fresh
       throw FileSystemException('Phone did not return the requested part of the file', path);
+    } catch (_) {
+      _restart(); // anything unexpected: never let a half-read answer shift the next one
+      rethrow;
     }
   }
+
   Future<Process> _connection() async {
     if (_shell != null) return _shell!;
     final p = await Process.start(adbPath, ['-s', serial, 'shell', '-T']);
@@ -192,7 +198,7 @@ class PhoneStreamer {
       _dataArrived?.complete();
       _dataArrived = null;
     }, onDone: () {
-      _shell = null;
+      if (identical(_shell, p)) _shell = null; // an old, replaced connection closing changes nothing
       _dataArrived?.complete();
       _dataArrived = null;
     });
@@ -200,13 +206,18 @@ class PhoneStreamer {
     return _shell = p;
   }
 
-  Future<Uint8List> _take(int n) async {
-    while (_incoming.length < n) {
+  /// The bytes up to the next newline (which is removed).
+  Future<Uint8List> _takeLine() async {
+    while (true) {
+      final at = _incoming.indexOf(10);
+      if (at >= 0) {
+        final line = _incoming.take(at + 1);
+        return Uint8List.sublistView(line, 0, at);
+      }
       if (_shell == null) throw const FileSystemException('Connection to the phone closed');
       _dataArrived = Completer<void>();
       await _dataArrived!.future;
     }
-    return _incoming.take(n);
   }
 
   void _restart() {
@@ -278,6 +289,19 @@ class _ByteQueue {
     if (chunk.isEmpty) return;
     _chunks.add(chunk);
     length += chunk.length;
+  }
+
+  /// Position of the first [byte] waiting in the queue, or -1.
+  int indexOf(int byte) {
+    var offset = 0, first = true;
+    for (final c in _chunks) {
+      final start = first ? _head : 0;
+      final i = c.indexOf(byte, start);
+      if (i >= 0) return offset + i - start;
+      offset += c.length - start;
+      first = false;
+    }
+    return -1;
   }
 
   Uint8List take(int n) {

@@ -3,9 +3,15 @@
 /// of clean-ups. One SQLite file; nothing leaves the laptop.
 library;
 
+import 'dart:io';
+
 import 'package:declutter_engine/declutter_engine.dart';
 import 'package:phone_link/phone_link.dart';
 import 'package:sqlite3/sqlite3.dart';
+
+import 'src/dpapi.dart';
+
+export 'src/dpapi.dart' show Dpapi;
 
 /// How a phone's file list changed since the last time it was connected.
 class InventoryDiff {
@@ -63,20 +69,25 @@ class CleanOp {
 }
 
 class Store {
-  Store._(this._db) {
+  Store._(this._db, {required this.protectText}) {
     _migrate();
   }
 
-  /// Opens (or creates) the database file at [path].
-  factory Store.open(String path) => Store._(sqlite3.open(path));
-  factory Store.inMemory() => Store._(sqlite3.openInMemory());
+  /// Opens (or creates) the database file at [path]. Text read off
+  /// screenshots is stored encrypted for the current Windows user.
+  factory Store.open(String path) => Store._(sqlite3.open(path), protectText: Platform.isWindows);
+  factory Store.inMemory() => Store._(sqlite3.openInMemory(), protectText: false);
 
   final Database _db;
-  static const _schemaVersion = 3;
+
+  /// Whether screenshot text is encrypted at rest (see [Dpapi]).
+  final bool protectText;
+  static const _schemaVersion = 5;
 
   void _migrate() {
     _db.execute('PRAGMA foreign_keys = ON');
     _db.execute('PRAGMA journal_mode = WAL'); // safe if the app is closed mid-write
+    _db.execute('PRAGMA secure_delete = ON'); // deleted rows are overwritten, not just unlinked
     final version = _db.select('PRAGMA user_version').first.columnAt(0) as int;
     if (version >= _schemaVersion) return;
     if (version < 1) _createV1();
@@ -102,8 +113,72 @@ class Store {
       final has = _db.select('PRAGMA table_info(measurements)').any((c) => c['name'] == 'landscape');
       if (!has) _db.execute('ALTER TABLE measurements ADD COLUMN landscape INTEGER');
     }
+    if (version < 5) {
+      // Content fingerprints (MD5, computed on the phone), kept while the file
+      // is unchanged so the phone isn't asked again on every connection.
+      _db.execute('''
+        CREATE TABLE IF NOT EXISTS fingerprints (
+          phone TEXT NOT NULL, path TEXT NOT NULL,
+          modified_sec INTEGER NOT NULL, bytes INTEGER NOT NULL, md5 TEXT NOT NULL,
+          PRIMARY KEY (phone, path),
+          FOREIGN KEY (phone, path) REFERENCES files (phone, path) ON DELETE CASCADE
+        ) WITHOUT ROWID;
+      ''');
+    }
+    var vacuum = false;
+    if (version < 4 && protectText) {
+      // Encrypt text saved before encryption existed, then rebuild the file
+      // so no plain copy survives in free pages.
+      final rows = _db.select("SELECT phone, path, text FROM measurements WHERE text IS NOT NULL AND text <> ''");
+      _transaction(() {
+        final put = _db.prepare('UPDATE measurements SET text = ? WHERE phone = ? AND path = ?');
+        try {
+          for (final r in rows) {
+            final t = r['text'] as String;
+            if (!Dpapi.isProtected(t)) put.execute([Dpapi.protect(t), r['phone'], r['path']]);
+          }
+        } finally {
+          put.close();
+        }
+      });
+      vacuum = rows.isNotEmpty;
+    }
     _db.execute('PRAGMA user_version = $_schemaVersion');
+    if (vacuum) _scrubFile();
   }
+
+  /// Rewrites the database file so deleted or replaced data is gone from it,
+  /// including the write-ahead log.
+  void _scrubFile() {
+    _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    _db.execute('VACUUM');
+    _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+  }
+
+  /// Removes everything Declutter knows about a phone from this laptop:
+  /// its file list, measurements and screenshot text, and clean-up history.
+  /// (Backup copies in "Declutter Backups" are the user's files and stay.)
+  void forgetPhone(String serial) {
+    _transaction(() {
+      _db.execute('DELETE FROM fingerprints WHERE phone = ?', [serial]);
+      _db.execute('DELETE FROM clean_ops WHERE phone = ?', [serial]);
+      _db.execute('DELETE FROM sessions WHERE phone = ?', [serial]);
+      _db.execute('DELETE FROM measurements WHERE phone = ?', [serial]);
+      _db.execute('DELETE FROM files WHERE phone = ?', [serial]);
+      _db.execute('DELETE FROM phones WHERE serial = ?', [serial]);
+    });
+    _textCache.clear();
+    _scrubFile();
+  }
+
+  String? _seal(String? text) =>
+      text == null || text.isEmpty || !protectText ? text : Dpapi.protect(text);
+
+  // Decrypting is cheap but not free; the same rows are read after every
+  // photo-check batch.
+  final _textCache = <String, String>{};
+  String? _open(String? stored) =>
+      stored == null || !Dpapi.isProtected(stored) ? stored : _textCache[stored] ??= Dpapi.unprotect(stored);
 
   void _createV1() {
     _db.execute('''
@@ -224,8 +299,38 @@ class Store {
       ''');
       try {
         for (final MapEntry(key: path, value: a) in byPath.entries) {
-          put.execute([phone, path, a.modified, a.bytes, a.takenAtMs, a.screenshot ? 1 : 0, a.text, a.dHash,
+          put.execute([phone, path, a.modified, a.bytes, a.takenAtMs, a.screenshot ? 1 : 0, _seal(a.text), a.dHash,
             a.sharpness, a.entropy, a.faceCount, a.landscape == null ? null : (a.landscape! ? 1 : 0), now]);
+        }
+      } finally {
+        put.close();
+      }
+    });
+  }
+
+  /// Remembered content fingerprints (path → MD5) for files that haven't
+  /// changed since they were fingerprinted.
+  Map<String, String> fingerprints(String phone) => {
+        for (final r in _db.select('''
+          SELECT p.path, p.md5 FROM fingerprints p
+          JOIN files f ON f.phone = p.phone AND f.path = p.path
+            AND f.modified_sec = p.modified_sec AND f.bytes = p.bytes
+          WHERE p.phone = ?
+        ''', [phone]))
+          r['path'] as String: r['md5'] as String,
+      };
+
+  /// Remembers fingerprints just computed on the phone, tied to each file's
+  /// current size and date (a changed file is fingerprinted again).
+  void saveFingerprints(String phone, Map<String, String> md5ByPath) {
+    _transaction(() {
+      final put = _db.prepare('''
+        INSERT OR REPLACE INTO fingerprints (phone, path, modified_sec, bytes, md5)
+        SELECT phone, path, modified_sec, bytes, ? FROM files WHERE phone = ? AND path = ?
+      ''');
+      try {
+        for (final MapEntry(key: path, value: md5) in md5ByPath.entries) {
+          put.execute([md5, phone, path]);
         }
       } finally {
         put.close();
@@ -246,7 +351,7 @@ class Store {
             bytes: r['bytes'] as int,
             takenAtMs: r['taken_ms'] as int,
             screenshot: r['screenshot'] == 1,
-            text: r['text'] as String?,
+            text: _open(r['text'] as String?),
             dHash: r['dhash'] as int?,
             sharpness: (r['sharpness'] as num?)?.toDouble(),
             entropy: (r['entropy'] as num?)?.toDouble(),

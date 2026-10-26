@@ -68,7 +68,15 @@ class HomePage extends StatelessWidget {
                     ],
                     waiting: true,
                   ),
-                  LinkState.error => _Guide(
+                  LinkState.forgotten => _Guide(
+                  title: 'This phone is forgotten',
+                  steps: const [
+                    'Everything Declutter saved about it on this laptop has been deleted.',
+                    'Unplug it, or read it again to start fresh.',
+                  ],
+                  action: TextButton(onPressed: session.rescan, child: const Text('Read it again')),
+                ),
+                LinkState.error => _Guide(
                     title: 'Something went wrong',
                     steps: [session.error ?? 'Unknown error', 'Unplug and reconnect the phone to try again.'],
                   ),
@@ -236,12 +244,46 @@ class _Overview extends StatelessWidget {
                 'Nothing on the phone was changed.',
                 style: const TextStyle(fontSize: 12, color: Tone.muted),
               ),
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
+                  onPressed: () => _confirmForget(context),
+                  child: const Text('Forget this phone on this laptop…'),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
   }
+}
+
+Future<void> _confirmForget(BuildContext context) async {
+  final session = (context.findAncestorWidgetOfExactType<HomePage>())!.session;
+  final yes = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Forget this phone?'),
+      content: const SizedBox(
+        width: 460,
+        child: Text(
+          'Declutter will delete everything it saved about this phone on this laptop: its file list, what it '
+          'measured and read from screenshots, and the history of past clean-ups (so they can no longer be '
+          'undone from here).\n\nNothing on the phone changes, and backup copies in "Declutter Backups" stay. '
+          'Connecting the phone again starts fresh.',
+          style: TextStyle(height: 1.45),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+        FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Forget this phone')),
+      ],
+    ),
+  );
+  if (yes == true) session.forgetPhone();
 }
 
 /// One group in a slip: name, count, size, and a way in.
@@ -390,10 +432,11 @@ class _PhonePicker extends StatelessWidget {
 }
 
 class _Guide extends StatelessWidget {
-  const _Guide({required this.title, required this.steps, this.waiting = false});
+  const _Guide({required this.title, required this.steps, this.waiting = false, this.action});
   final String title;
   final List<String> steps;
   final bool waiting;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
@@ -420,6 +463,7 @@ class _Guide extends StatelessWidget {
               if (steps.isNotEmpty) const SizedBox(height: 12),
               for (final (i, s) in steps.indexed)
                 SlipRow('${i + 1}', s, labelWidth: 32, selectable: false, prose: true),
+              if (action != null) ...[const SizedBox(height: 12), action!],
             ],
           ),
         ),

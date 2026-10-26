@@ -8,7 +8,7 @@ import 'package:phone_link/phone_link.dart';
 
 import 'photo_scan.dart';
 
-enum LinkState { noAdb, waiting, unauthorized, reading, ready, error }
+enum LinkState { noAdb, waiting, unauthorized, reading, ready, forgotten, error }
 
 /// What's on the phone, grouped for the overview screen.
 class PhoneSummary {
@@ -94,6 +94,24 @@ class PhoneSession extends ChangeNotifier {
     await _poll();
   }
 
+  /// Deletes everything this laptop saved about the connected phone. It then
+  /// shows as forgotten until it's unplugged or read again.
+  Future<void> forgetPhone() async {
+    final s = serial, p = photos;
+    if (s == null) return;
+    _step('Forgetting this phone…');
+    _stopPhotos();
+    // A batch already being checked would otherwise save after the wipe.
+    while (p != null && p.running) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    store.forgetPhone(s);
+    suggestions = {};
+    _fileLevel = {};
+    summary = null;
+    _set(LinkState.forgotten);
+  }
+
   /// Reads the current phone again (after a clean-up or undo).
   Future<void> rescan() async {
     await _idle();
@@ -171,10 +189,15 @@ class PhoneSession extends ChangeNotifier {
         ),
     ];
     final candidates = sameSizeCandidates(facts);
-    _step('Checking ${candidates.length} possible duplicates on the phone…');
-    final hashes = await _adb!.fingerprints(s, [
-      for (final c in candidates) c.path,
-    ], onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
+    _step('Checking possible duplicates on the phone…');
+    // Fingerprints of unchanged files are remembered; only new or changed
+    // ones are asked for (that took ~20 s on every connection).
+    final hashes = store.fingerprints(s);
+    final ask = [for (final c in candidates) if (!hashes.containsKey(c.path)) c.path];
+    final fresh = await _adb!.fingerprints(s, ask,
+        onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${ask.length}'));
+    store.saveFingerprints(s, fresh);
+    hashes.addAll(fresh);
     _fileLevel = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
     try {
       _apps = await _adb!.installedApps(s); // names the apps screenshots come from
@@ -191,6 +214,7 @@ class PhoneSession extends ChangeNotifier {
     _set(LinkState.ready);
     unawaited(photos!.run(files));
   }
+
 
   /// Photo results appear batch by batch, without waiting for the end.
   void _onPhotos() {
@@ -271,8 +295,10 @@ class PhoneSession extends ChangeNotifier {
       '${File(Platform.resolvedExecutable).parent.path}\\adb\\adb.exe',
       if (env['ANDROID_HOME'] != null) '${env['ANDROID_HOME']}\\platform-tools\\adb.exe',
       if (env['LOCALAPPDATA'] != null) '${env['LOCALAPPDATA']}\\Android\\Sdk\\platform-tools\\adb.exe',
+      // Only absolute PATH entries: a relative one (".") would resolve to
+      // whatever folder Declutter was started from.
       for (final dir in (env['PATH'] ?? '').split(';'))
-        if (dir.isNotEmpty) '$dir\\adb.exe',
+        if (RegExp(r'^[A-Za-z]:\\|^\\\\').hasMatch(dir.trim())) '${dir.trim()}\\adb.exe',
     ];
     return candidates.where((p) => File(p).existsSync()).firstOrNull;
   }
