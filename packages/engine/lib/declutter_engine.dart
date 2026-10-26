@@ -10,5 +10,6 @@ export 'src/image_rules.dart';
 export 'src/learner.dart';
 export 'src/photo_rules.dart';
 export 'src/scan_cache.dart';
+export 'src/screenshot_groups.dart';
 export 'src/text_rules.dart';
 export 'src/verdict.dart';

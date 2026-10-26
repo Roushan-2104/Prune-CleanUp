@@ -73,6 +73,7 @@ class PhoneSession extends ChangeNotifier {
   /// what the photo check has measured so far.
   Map<String, FileVerdict> suggestions = {};
   Map<String, FileVerdict> _fileLevel = {};
+  List<String> _apps = const [];
 
   /// Checks photos and screenshots in the background once the phone is read.
   PhotoScan? photos;
@@ -167,6 +168,13 @@ class PhoneSession extends ChangeNotifier {
     final hashes = await _adb!.fingerprints(s, [for (final c in candidates) c.path],
         onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
     _fileLevel = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
+    try {
+      _apps = await _adb!.installedApps(s); // names the apps screenshots come from
+    } on PhoneDisconnected {
+      rethrow;
+    } catch (_) {
+      _apps = const [];
+    }
 
     _stopPhotos();
     photos = PhotoScan(adb: _adb!, serial: s, store: store)..addListener(_onPhotos);
@@ -188,7 +196,7 @@ class PhoneSession extends ChangeNotifier {
   }
 
   void _merge(List<PhoneFile> files) {
-    suggestions = mergeSuggestions(_fileLevel, photos?.judge(files) ?? {});
+    suggestions = mergeSuggestions(_fileLevel, photos?.judge(files, installedApps: _apps) ?? {});
     needAnalysis = store.needingAnalysis(serial!).length;
   }
 

@@ -8,7 +8,6 @@ import 'verdict.dart';
 enum TrueLabel {
   payment('Payment screenshot'),
   chat('Chat screenshot'),
-  otp('OTP screenshot'),
   otherScreenshot('Other screenshot'),
   blurry('Blurry photo'),
   duplicate('Duplicate / similar'),
@@ -23,7 +22,6 @@ enum TrueLabel {
   bool matches(JunkCategory category) => switch (category) {
         JunkCategory.paymentScreenshot => this == payment,
         JunkCategory.chatScreenshot => this == chat,
-        JunkCategory.otpScreenshot => this == otp,
         JunkCategory.otherScreenshot => this == otherScreenshot,
         JunkCategory.blurry => this == blurry,
         JunkCategory.exactDuplicate || JunkCategory.nearDuplicate => this == duplicate,

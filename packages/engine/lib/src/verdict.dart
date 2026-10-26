@@ -2,7 +2,6 @@
 enum JunkCategory {
   paymentScreenshot('Payment screenshots'),
   chatScreenshot('Chat screenshots'),
-  otpScreenshot('OTP screenshots'),
   otherScreenshot('Other screenshots'),
   blurry('Blurry photos'),
   exactDuplicate('Exact duplicates'),

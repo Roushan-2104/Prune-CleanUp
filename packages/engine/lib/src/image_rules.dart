@@ -1,6 +1,7 @@
 import 'file_rules.dart';
 import 'photo_rules.dart';
 import 'scan_cache.dart';
+import 'screenshot_groups.dart';
 import 'text_rules.dart';
 import 'verdict.dart';
 
@@ -75,9 +76,15 @@ bool looksLikeScreenshot(ImageFacts f, String? text, {int? width, int? height}) 
 
 /// Judges analysed images: screenshot categories, blurry photos, and
 /// similar/identical photos (the sharpest copy is kept).
-Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String, ImageFacts> facts) {
+///
+/// Screenshots are then grouped by who a chat is with and by the app or
+/// site a screen shows ([groupScreenshots]); [installedPackages] (the
+/// phone's app list) helps name apps.
+Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String, ImageFacts> facts,
+    {Iterable<String> installedPackages = const []}) {
   final out = <String, FileVerdict>{};
   final fingerprints = <PhotoFingerprint>[];
+  final shots = <String, (Verdict, String)>{};
 
   for (final MapEntry(key: path, value: a) in analyses.entries) {
     final f = facts[path];
@@ -90,7 +97,7 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
       var v = classifyScreenshotText(a.text ?? '');
       if (!isScreenshotByPlace(f)) v = Verdict(v.category, v.confidence,
           ['Screenshot saved or received from another app', ...v.reasons], label: v.label, evidence: v.evidence);
-      out[path] = FileVerdict(v);
+      shots[path] = (v, a.text ?? '');
       continue;
     }
     if (a.dHash == null || a.sharpness == null || a.entropy == null) continue;
@@ -109,6 +116,10 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
     // No face check yet (or it failed)? Assume there are people: never "sure".
     final blur = classifyBlurMetrics(sharpness: a.sharpness!, entropy: a.entropy!, faceCount: a.faceCount ?? 1);
     if (blur != null) out[path] = FileVerdict(blur);
+  }
+
+  for (final MapEntry(key: path, value: v) in groupScreenshots(shots, installedPackages: installedPackages).entries) {
+    out[path] = FileVerdict(v);
   }
 
   // Look-alikes win over blur: "keep the best copy" is easier to trust.

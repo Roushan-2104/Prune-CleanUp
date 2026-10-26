@@ -8,17 +8,13 @@ import 'verdict.dart';
 Verdict classifyScreenshotText(String rawText) {
   final text = _normalize(rawText);
 
-  final otp = _otp(text);
-  if (otp != null && otp.tier == Tier.sure) return otp;
-
   // Payment receipts are full of times like "10:42 pm", so they can look
   // like chats too. A real receipt wins over chat evidence.
   final payment = _payment(text);
   if (payment != null) return payment;
 
-  final candidates = [otp, _chat(text)].nonNulls.toList()
-    ..sort((a, b) => b.confidence.compareTo(a.confidence));
-  if (candidates.isNotEmpty) return candidates.first;
+  final chat = _chat(text);
+  if (chat != null) return chat;
 
   if (_isPaymentQr(text)) {
     return const Verdict(JunkCategory.otherScreenshot, 0.7, ['A "Scan & Pay" QR code, not a receipt'],
@@ -43,9 +39,9 @@ class ScreenshotKind {
 }
 
 const screenshotKinds = [
-  ScreenshotKind('Instagram / Reels', ['instagram', 'reels', 'reel'],
+  ScreenshotKind('Instagram', ['instagram', 'reels', 'reel'],
       ['liked by', 'follow', 'followers', 'following', 'view all comments', 'add comment', 'story', 'original audio', 'sponsored']),
-  ScreenshotKind('YouTube / videos', ['youtube', 'shorts'],
+  ScreenshotKind('YouTube', ['youtube', 'shorts'],
       ['subscribe', 'subscribers', 'views', 'watch later', 'comments', 'premiere']),
   ScreenshotKind('Social media posts', ['facebook', 'twitter', 'snapchat', 'threads', 'linkedin', 'sharechat', 'moj', 'josh'],
       ['retweet', 'repost', 'like', 'share', 'comment', 'follow', 'post', 'trending']),
@@ -260,30 +256,6 @@ bool _isPaymentQr(String text) => _any(text, _qrWords) && _upiId.hasMatch(text) 
 
 /// ["paid to", "utr"] → '"paid to", "utr"' (or "—" when empty).
 String _quoted(Iterable<String> words) => words.isEmpty ? '—' : words.map((w) => '"$w"').join(', ');
-
-const _otpWords = [
-  'otp', 'one time password', 'one-time password', 'one-time code', 'verification code', 'security code',
-  'login code', 'sign-in code', 'authentication code', 'passcode', 'your code is', '2fa',
-];
-const _otpWarnings = [
-  'do not share', "don't share", 'never share', 'valid for', 'expires in', 'expires', 'will never ask',
-  "won't ask", 'did not request', "didn't request",
-];
-
-Verdict? _otp(String text) {
-  if (!_any(text, _otpWords)) return null;
-  final hasCode = RegExp(r'\b\d{4,8}\b|\b\d{3}[- ]\d{3}\b').hasMatch(text);
-  final hasWarning = _any(text, _otpWarnings);
-  final evidence = {'Words found': _quoted([..._otpWords, ..._otpWarnings].where(text.contains).take(3))};
-  if (hasCode && hasWarning) {
-    return Verdict(JunkCategory.otpScreenshot, 0.95,
-        ['Contains a one-time password', 'OTP codes expire quickly'], evidence: evidence);
-  }
-  if (hasCode) {
-    return Verdict(JunkCategory.otpScreenshot, 0.75, ['Contains a one-time password'], evidence: evidence);
-  }
-  return null;
-}
 
 // Times like "10:42 pm" or "19:38". The first one on a screenshot is
 // usually the phone's clock in the status bar, not a message.

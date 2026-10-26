@@ -76,7 +76,7 @@ Pay   Request   Message''';
   group('other screenshot labels', () {
     test('Instagram reel', () {
       expect(classifyScreenshotText('nikhil.k_ Follow\nOriginal audio\nLiked by meera and 2,304 others').label,
-          'Instagram / Reels');
+          'Instagram');
     });
     test('shopping page', () {
       expect(classifyScreenshotText('Nike Air Max\n₹7,999\nAdd to cart\nFree delivery').label, 'Shopping');
@@ -120,19 +120,6 @@ Pay   Request   Message''';
     test('"wise" in a sentence alone does not make a payment', () {
       expect(classifyScreenshotText('That was a wise decision my friend').category,
           isNot(JunkCategory.paymentScreenshot));
-    });
-  });
-
-  group('worldwide verification codes', () {
-    test('Microsoft-style 123-456 security code', () {
-      final v = classifyScreenshotText('Your security code is 482-913. Never share this code with anyone.');
-      expect(v.category, JunkCategory.otpScreenshot);
-      expect(v.tier, Tier.sure);
-    });
-    test('login code that expires', () {
-      final v = classifyScreenshotText('Instagram login code: 551204. It expires in 10 minutes.');
-      expect(v.category, JunkCategory.otpScreenshot);
-      expect(v.tier, Tier.sure);
     });
   });
 
@@ -243,10 +230,10 @@ Type a message''';
     });
   });
 
-  test('OTP screenshot', () {
+  test('codes (OTPs) are just other screenshots now, never pre-ticked', () {
     final v = classifyScreenshotText('483920 is your OTP for login. Valid for 10 minutes. Do not share it with anyone.');
-    expect(v.category, JunkCategory.otpScreenshot);
-    expect(v.tier, Tier.sure);
+    expect(v.category, JunkCategory.otherScreenshot);
+    expect(v.tier, isNot(Tier.sure));
   });
 
   test('screenshot with no clues is only a "maybe"', () {

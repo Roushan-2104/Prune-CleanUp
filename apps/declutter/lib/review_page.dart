@@ -92,7 +92,12 @@ class _ReviewPageState extends State<ReviewPage> {
     return items
       ..sort((a, b) {
         final ga = a.value.verdict.label, gb = b.value.verdict.label;
-        if (ga != gb) return groupBytes[gb]!.compareTo(groupBytes[ga]!);
+        if (ga != gb) {
+          // Named groups first; catch-alls ("Other WhatsApp chats") last.
+          final oa = ga == null || ga.startsWith('Other '), ob = gb == null || gb.startsWith('Other ');
+          if (oa != ob) return oa ? 1 : -1;
+          return groupBytes[gb]!.compareTo(groupBytes[ga]!);
+        }
         return byPath[b.key]!.bytes.compareTo(byPath[a.key]!.bytes);
       });
   }

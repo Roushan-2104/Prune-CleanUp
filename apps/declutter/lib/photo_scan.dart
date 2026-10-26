@@ -67,13 +67,15 @@ class PhotoScan extends ChangeNotifier {
   List<PhoneFile> _files = const [];
 
   /// Image suggestions from everything measured so far (instant: no copying).
-  Map<String, FileVerdict> judge(List<PhoneFile> files) {
+  /// Re-run after every batch, so screenshot groups ("Neel7 · WhatsApp",
+  /// "LeetCode") build up while the check runs.
+  Map<String, FileVerdict> judge(List<PhoneFile> files, {List<String> installedApps = const []}) {
     final images = imagesOf(files);
     final measured = {
       for (final MapEntry(key: p, value: a) in store.measurements(serial).entries)
         if (images.containsKey(p)) p: a,
     };
-    return judgeImages(measured, images);
+    return judgeImages(measured, images, installedPackages: installedApps);
   }
 
   Future<void> run(List<PhoneFile> files) async {

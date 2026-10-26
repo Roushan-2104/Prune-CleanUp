@@ -86,6 +86,16 @@ class Adb {
     );
   }
 
+  /// Package names of the apps the user installed ("com.flipkart.android"),
+  /// used to name the apps screenshots come from.
+  Future<List<String>> installedApps(String serial) async {
+    final out = await shell(serial, 'pm list packages -3');
+    return [
+      for (final l in LineSplitter.split(out))
+        if (l.trim().startsWith('package:')) l.trim().substring('package:'.length),
+    ];
+  }
+
   /// Everything the phone's media index knows: photos, videos, audio,
   /// documents, downloads… Takes a few seconds even for 15k+ files.
   Future<List<PhoneFile>> listFiles(String serial) async {

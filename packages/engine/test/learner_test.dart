@@ -14,7 +14,7 @@ void main() {
   });
   tearDown(() => dir.delete(recursive: true));
 
-  const insta = Verdict(JunkCategory.otherScreenshot, 0.75, ['x'], label: 'Instagram / Reels');
+  const insta = Verdict(JunkCategory.otherScreenshot, 0.75, ['x'], label: 'Instagram');
   const payment = Verdict(JunkCategory.paymentScreenshot, 0.92, ['x']);
   const chatMaybe = Verdict(JunkCategory.chatScreenshot, 0.75, ['x']);
 

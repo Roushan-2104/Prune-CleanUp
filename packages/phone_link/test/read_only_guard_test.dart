@@ -11,6 +11,7 @@ void main() {
       'stat /sdcard/a.jpg',
       'content query --uri content://media/external/file --projection _id:_data',
       'dumpsys diskstats',
+      'pm list packages -3',
       "cat '/storage/emulated/0/DCIM/IMG 1.jpg'",
       // Operators inside a quoted file name are just text.
       "cat '/sdcard/WhatsApp/weird; rm -rf & name.jpg'",
@@ -34,6 +35,9 @@ void main() {
       'rm /sdcard/DCIM/a.jpg',
       'rm -rf /sdcard',
       'mv /sdcard/a.jpg /sdcard/b.jpg',
+      'pm uninstall com.whatsapp',
+      'pm clear com.whatsapp',
+      'pm list packages -3; pm uninstall com.whatsapp',
       'cp /sdcard/a /sdcard/b',
       'content delete --uri content://media/external/file --where _id=1',
       'content update --uri content://media/external/file --bind is_trashed:i:1',

@@ -20,6 +20,7 @@ const _allowed = <String>[
   'ls ',
   'content query ',
   'dumpsys diskstats',
+  'pm list packages -3', // names of apps the user installed; changes nothing
   'cat ', // used to stream a file's bytes *to* the laptop
   'find ', // only with the options in _findOptions
   'md5sum ', // fingerprints a file's content; prints a hash, changes nothing
