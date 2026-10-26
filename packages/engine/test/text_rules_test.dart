@@ -150,6 +150,78 @@ Pay   Request   Message''';
     });
   });
 
+  group('chats are told apart by app', () {
+    test('WhatsApp: read ticks after each time (OCR reads ✓✓ as "W", "V/")', () {
+      const text = '22:26\nNikhil\nYou\nKal milte hain\n22:23\n22:24 w\nTheek hai\n22:24 W\nOk bye 22:25 V/';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.chatScreenshot);
+      expect(v.label, 'WhatsApp chats');
+    });
+    test('Instagram DM', () {
+      const text = '10:12\nalex.k\nActive now\nReplied to your story\nhaha nice\nMessage...';
+      expect(classifyScreenshotText(text).label, 'Instagram DMs');
+    });
+    test("LinkedIn's \"Write a message...\" is not an Instagram DM", () {
+      const text = '21:03\nMeera Iyer\nMobile • 6m ago\nMeera Iyer (She/Her) • 8:43 PM\nThanks for connecting!\n'
+          'You • 8:50 PM\nSure\nWrite a message...';
+      expect(classifyScreenshotText(text).label, 'LinkedIn messages');
+    });
+    test('a page that only mentions an app is not a chat', () {
+      const text = '15:24\nReels\n7 videos on building an AI startup\nFrom Stanford, Sequoia and ChatGPT creators\n'
+          'Follow for more on Instagram';
+      expect(classifyScreenshotText(text).category, isNot(JunkCategory.chatScreenshot));
+    });
+    test('notification shade with several times is not a chat', () {
+      const text = '20:42 Sun, 10 Aug\nWi-Fi\nBluetooth\nOff\nInstagram • now\nSale ends 6 hrs left 20:41\n'
+          'Calendar 19:00\nReminder 19:30';
+      expect(classifyScreenshotText(text).category, isNot(JunkCategory.chatScreenshot));
+    });
+    test('a train booking page is not a chat', () {
+      const text = '10:21\nNDLS - Agra\n18:50 Fri, 12 Mar\n23:00 Sat, 13 Mar\nFew Seats\n07:30 PNR\nPassenger details';
+      expect(classifyScreenshotText(text).category, isNot(JunkCategory.chatScreenshot));
+    });
+  });
+
+  group('payments need proof', () {
+    test('OCR turns ₹ into "?" and zeros into "O": still a receipt', () {
+      const text = 'QIOO.OO\nPaid to\nAMIT SINGH\nPhonePe • 9876543210@ybl\n24 December 2025, 9:50 pm';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.paymentScreenshot);
+      expect(v.tier, Tier.sure);
+      expect(v.label, 'PhonePe payments');
+    });
+    test('"Payment Successful" with a UPI ID but an unreadable amount is still sure', () {
+      const text = '19:30\nPayment Successful\n22 February 2026 at 07:30 PM\nTiffin Corner\n9000000001@okbizaxis\n'
+          'View Details\nDone\nShare Receipt';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.paymentScreenshot);
+      expect(v.tier, Tier.sure);
+      expect(v.label, 'UPI payments');
+    });
+    test('a shop\'s "Scan & Pay" QR code is not a receipt', () {
+      const text = 'PhonePe\nACCEPTED HERE\nScan & Pay Using PhonePe App\nSample Stores\nshop123@ybl';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.otherScreenshot);
+      expect(v.label, 'Payment QR codes');
+    });
+    test('a checkout page is not a receipt', () {
+      const text = '17:07\nSubtotal\nRoll on Deo\nQty: 1\nShipping\nTo Pay ₹745\nUPI\nG Pay\nAmazon Pay\nPay now';
+      expect(classifyScreenshotText(text).category, isNot(JunkCategory.paymentScreenshot));
+    });
+    test('an email footer "You received this message" is not a payment', () {
+      const text = '2:19 PM\nImran\nOct 23, 2025\nPlease share how to enroll ₹500\n'
+          'You received this message because you are subscribed';
+      expect(classifyScreenshotText(text).category, isNot(JunkCategory.paymentScreenshot));
+    });
+  });
+
+  group('status bar', () {
+    test('clock at the very top', () => expect(hasStatusBar('17:50 0 @ m\nAdmissions 2025\nDear Candidate'), isTrue));
+    test('battery and clock on the first line', () => expect(hasStatusBar('LTE 64% 10:21\nTrain list'), isTrue));
+    test('a poster with a time in the middle has none',
+        () => expect(hasStatusBar('THE PLAY\nfrom the world of\nSherlock Holmes\n10 SEPTEMBER 6:30 PM'), isFalse));
+  });
+
   group('chat screenshots', () {
     test('WhatsApp chat is sure', () {
       const text = '''

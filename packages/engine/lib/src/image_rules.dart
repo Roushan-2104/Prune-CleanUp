@@ -63,11 +63,15 @@ bool mightBeScreenshot(ImageFacts f) {
           .any(folder.contains);
 }
 
-/// After reading its text: is this image really a screenshot?
-bool looksLikeScreenshot(ImageFacts f, String? text, {int? width, int? height}) =>
-    isScreenshotByPlace(f) ||
-    isPhoneScreenShaped(f.width ?? width, f.height ?? height) ||
-    (text ?? '').replaceAll(RegExp(r'\s'), '').length >= 60;
+/// After reading its text: is this image really a screenshot? Lots of text
+/// alone isn't enough — photos of posters, notes and certificates have that
+/// too. It needs the screenshot folder, a phone-screen shape, the phone's
+/// status bar, or an app screen the rules recognise (receipt, chat, OTP).
+bool looksLikeScreenshot(ImageFacts f, String? text, {int? width, int? height}) {
+  if (isScreenshotByPlace(f) || isPhoneScreenShaped(f.width ?? width, f.height ?? height)) return true;
+  if (text == null || text.trim().isEmpty) return false;
+  return hasStatusBar(text) || classifyScreenshotText(text).category != JunkCategory.otherScreenshot;
+}
 
 /// Judges analysed images: screenshot categories, blurry photos, and
 /// similar/identical photos (the sharpest copy is kept).
@@ -79,7 +83,10 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
     final f = facts[path];
     if (f == null || !shouldAnalyseImage(f)) continue;
 
-    if (a.screenshot) {
+    // Decided again from the saved text, so better rules apply without
+    // copying anything from the phone again.
+    final screenshot = a.text != null ? looksLikeScreenshot(f, a.text) : a.screenshot;
+    if (screenshot) {
       var v = classifyScreenshotText(a.text ?? '');
       if (!isScreenshotByPlace(f)) v = Verdict(v.category, v.confidence,
           ['Screenshot saved or received from another app', ...v.reasons], label: v.label, evidence: v.evidence);

@@ -37,6 +37,14 @@ void main() {
     expect(v.reasons.first, contains('received from another app'));
   });
 
+  test('a photo of a poster or letter is not a screenshot, however much text it has', () {
+    final f = img('Android/media/com.whatsapp/WhatsApp/Media/WhatsApp Images/', 'IMG-7.jpg', w: 2160, h: 3840);
+    const letter = 'Dear friend,\nI am really sorry. I know I might have hurt you, and even if I didn\'t mean to, '
+        'I know intention does not erase pain. You matter to me more than I can explain.';
+    expect(looksLikeScreenshot(f, letter), isFalse);
+    expect(looksLikeScreenshot(f, '21:03\nMeera\nlast seen today at 21:01\nHi 21:02\nHello 21:02'), isTrue);
+  });
+
   test('blurry photo without a face check is never pre-ticked', () {
     final f = img('DCIM/Camera/', 'IMG_blur.jpg');
     final r = judgeImages({f.path: photo(sharp: 5, faces: null)}, {f.path: f});

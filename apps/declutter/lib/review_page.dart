@@ -81,9 +81,21 @@ class _ReviewPageState extends State<ReviewPage> {
     return _current;
   }
 
-  List<MapEntry<String, FileVerdict>> itemsIn(JunkCategory? c) =>
-      _live.where((e) => e.value.verdict.category == c).toList()
-        ..sort((a, b) => byPath[b.key]!.bytes.compareTo(byPath[a.key]!.bytes));
+  /// Biggest first, kept together by app ("WhatsApp chats", "PhonePe
+  /// payments"…) with the biggest group on top, as the list shows them.
+  List<MapEntry<String, FileVerdict>> itemsIn(JunkCategory? c) {
+    final items = _live.where((e) => e.value.verdict.category == c).toList();
+    final groupBytes = <String?, int>{};
+    for (final e in items) {
+      groupBytes.update(e.value.verdict.label, (b) => b + byPath[e.key]!.bytes, ifAbsent: () => byPath[e.key]!.bytes);
+    }
+    return items
+      ..sort((a, b) {
+        final ga = a.value.verdict.label, gb = b.value.verdict.label;
+        if (ga != gb) return groupBytes[gb]!.compareTo(groupBytes[ga]!);
+        return byPath[b.key]!.bytes.compareTo(byPath[a.key]!.bytes);
+      });
+  }
 
   int bytesOf(Iterable<String> paths) => paths.fold(0, (s, p) => s + (byPath[p]?.bytes ?? 0));
 
@@ -242,10 +254,12 @@ class _Items extends StatelessWidget {
           Expanded(
             child: isDuplicates
                 ? _DuplicateGroups(state: state, items: items)
-                : ListView.builder(
-                    itemCount: items.length,
-                    itemBuilder: (context, i) => _Row(state: state, entry: items[i]),
-                  ),
+                : items.map((e) => e.value.verdict.label).toSet().length > 1
+                    ? _LabelGroups(state: state, items: items)
+                    : ListView.builder(
+                        itemCount: items.length,
+                        itemBuilder: (context, i) => _Row(state: state, entry: items[i]),
+                      ),
           ),
         ]);
       },
@@ -264,6 +278,55 @@ class _Items extends StatelessWidget {
         JunkCategory.cacheFiles => 'Gallery previews and WhatsApp statuses you viewed. Rebuilt or expired automatically.',
         _ => 'Ticked items are ones Declutter is sure about. Others are for you to check.',
       };
+}
+
+/// Items split by app or kind — "WhatsApp chats", "Instagram DMs",
+/// "PhonePe payments" — each with its own tick-all.
+class _LabelGroups extends StatelessWidget {
+  const _LabelGroups({required this.state, required this.items});
+  final _ReviewPageState state;
+  final List<MapEntry<String, FileVerdict>> items; // already grouped, see itemsIn
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme, c = Theme.of(context).colorScheme;
+    final rows = <Object>[]; // a group's label (String) or one of its items
+    String? last = '\u0000';
+    for (final e in items) {
+      final label = e.value.verdict.label ?? 'Other';
+      if (label != last) rows.add(label);
+      last = label;
+      rows.add(e);
+    }
+    return ListView.builder(
+      itemCount: rows.length,
+      itemBuilder: (context, i) {
+        final row = rows[i];
+        if (row is MapEntry<String, FileVerdict>) return _Row(state: state, entry: row);
+        final label = row as String;
+        final paths = [for (final e in items) if ((e.value.verdict.label ?? 'Other') == label) e.key];
+        final allPicked = paths.every(state.selection.has);
+        return Container(
+          color: c.surfaceContainerLow,
+          padding: const EdgeInsets.fromLTRB(20, 10, 12, 10),
+          child: Row(children: [
+            Expanded(
+              child: Text.rich(TextSpan(children: [
+                TextSpan(text: label, style: t.titleSmall),
+                TextSpan(
+                    text: '   ${paths.length} · ${formatBytes(state.bytesOf(paths))}',
+                    style: t.bodySmall?.copyWith(color: c.onSurfaceVariant)),
+              ])),
+            ),
+            TextButton(
+              onPressed: () => state.selection.setAll(paths, !allPicked),
+              child: Text(allPicked ? 'Untick these' : 'Tick these'),
+            ),
+          ]),
+        );
+      },
+    );
+  }
 }
 
 /// Duplicates: the kept original (green) with its copies beneath it.
