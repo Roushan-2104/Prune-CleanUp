@@ -1,0 +1,426 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T13:11:53+00:00",
+  "title": "Design System: Declutter",
+  "extensions": {
+    "colorMeta": {
+      "stamp": {
+        "role": "primary",
+        "displayName": "Stamp-Pad Violet",
+        "canonical": "oklch(43.2% 0.128 298.8)",
+        "tonalRamp": [
+          "#0C0912",
+          "#291E3D",
+          "#4A346F",
+          "#6C4D9F",
+          "#8D6FC4",
+          "#AD97DB",
+          "#CEC1EB",
+          "#F0ECFA"
+        ]
+      },
+      "stamp-tint": {
+        "role": "primary",
+        "displayName": "Stamp Wash",
+        "canonical": "oklch(94.6% 0.015 302.6)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#262428",
+          "#434147",
+          "#635F69",
+          "#84808A",
+          "#A6A3AB",
+          "#CAC8CD",
+          "#EFEEF0"
+        ]
+      },
+      "on-stamp": {
+        "role": "primary",
+        "displayName": "On Stamp",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252525",
+          "#424242",
+          "#616161",
+          "#828282",
+          "#A5A5A5",
+          "#C9C9C9",
+          "#EEEEEE"
+        ]
+      },
+      "rule": {
+        "role": "secondary",
+        "displayName": "Catalog Red Rule",
+        "canonical": "oklch(55.6% 0.183 28.5)",
+        "tonalRamp": [
+          "#150705",
+          "#450F0B",
+          "#7C110D",
+          "#B21F19",
+          "#DA4A3D",
+          "#F07F71",
+          "#FBB5AB",
+          "#FFE8E4"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(28.5% 0.006 91.6)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252524",
+          "#43423F",
+          "#62615E",
+          "#83827F",
+          "#A6A5A2",
+          "#CAC9C7",
+          "#EEEEEE"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "canonical": "oklch(51.8% 0.010 84.6)",
+        "tonalRamp": [
+          "#0B0B0A",
+          "#262523",
+          "#44423D",
+          "#64615B",
+          "#85827C",
+          "#A7A5A0",
+          "#CAC9C6",
+          "#EFEEED"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Catalog Stock",
+        "canonical": "oklch(98.5% 0.005 95.1)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#252524",
+          "#43423F",
+          "#62615E",
+          "#83827F",
+          "#A6A5A2",
+          "#C9C9C7",
+          "#EEEEEE"
+        ]
+      },
+      "desk": {
+        "role": "neutral",
+        "displayName": "Desk",
+        "canonical": "oklch(95.8% 0.008 91.5)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#262523",
+          "#43423E",
+          "#63615C",
+          "#84827D",
+          "#A6A5A1",
+          "#CAC9C6",
+          "#EFEEED"
+        ]
+      },
+      "blank": {
+        "role": "neutral",
+        "displayName": "Empty Frame",
+        "canonical": "oklch(93.1% 0.014 88.7)",
+        "tonalRamp": [
+          "#0B0B0A",
+          "#262522",
+          "#44423C",
+          "#646158",
+          "#868279",
+          "#A8A59D",
+          "#CBC9C4",
+          "#EFEEED"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Buff Edge",
+        "canonical": "oklch(88.3% 0.017 88.0)",
+        "tonalRamp": [
+          "#0C0B0A",
+          "#272521",
+          "#45423A",
+          "#656156",
+          "#878277",
+          "#A8A59C",
+          "#CBC9C3",
+          "#EFEEEC"
+        ]
+      },
+      "ruling": {
+        "role": "neutral",
+        "displayName": "Blue Ruling",
+        "canonical": "oklch(94.4% 0.011 252.1)",
+        "tonalRamp": [
+          "#0B0B0C",
+          "#232528",
+          "#3F4247",
+          "#5D6268",
+          "#7E8389",
+          "#A1A5AB",
+          "#C7C9CC",
+          "#EEEEEF"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Home headline only: 'You can free X GB'."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The open group's name above the review grid."
+      },
+      "title-lg": {
+        "displayName": "Title Large",
+        "purpose": "Connection guide slip titles."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Wordmark in the top bar; section headings on home."
+      },
+      "title-sm": {
+        "displayName": "Title Small",
+        "purpose": "Focused item's file name in the detail panel."
+      },
+      "subhead": {
+        "displayName": "Subhead",
+        "purpose": "Sub-group headers and slip headings."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Explanatory paragraph under the display line, max 640px."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Sentences, group names, guide steps."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Filled button labels."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Text button labels and picture labels in the detail panel."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Top-bar meta, folder paths, footnotes; rail headings at 600."
+      },
+      "fact": {
+        "displayName": "Fact",
+        "purpose": "Every typed item fact: reason, size, date, count, evidence. One size for all facts."
+      },
+      "fact-bold": {
+        "displayName": "Fact Bold",
+        "purpose": "Slip row labels; ranks a fact by weight, not size."
+      },
+      "stamp": {
+        "displayName": "Stamp",
+        "purpose": "The REMOVE stamp only, uppercase."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "The system is flat: paper on desk with 1px Buff Edge lines. Only the Clean confirmation dialog keeps Material's default dialog elevation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "tick",
+        "value": "120ms linear",
+        "purpose": "Tick box fill and border change."
+      },
+      {
+        "name": "pick-slide",
+        "value": "260ms cubic-bezier(0.215, 0.61, 0.355, 1)",
+        "purpose": "Violet picked share of the storage bar sliding as ticks change (Flutter easeOutCubic)."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "rail",
+        "value": "19% of window, clamped 230-290px"
+      },
+      {
+        "name": "detail",
+        "value": "28% of window, clamped 340-440px"
+      },
+      {
+        "name": "card-column",
+        "value": "230px card + 16px gap inside a 28px gutter"
+      },
+      {
+        "name": "laptop-min",
+        "value": "1280px wide keeps 2-3 card columns"
+      }
+    ],
+    "platform": "Native Windows desktop (Flutter, Material 3), light theme only. Not web; the CSS snippets approximate the Flutter widgets for the panel.",
+    "openDecisions": [
+      "Courier Prime was considered for the typed voice but is not bundled; the shipped typed face is Consolas."
+    ]
+  },
+  "components": [
+    {
+      "name": "Clean Button",
+      "kind": "button",
+      "refersTo": "button-clean",
+      "description": "The one coloured button: removes the picked items. Its label carries the amount.",
+      "html": "<button class=\"ds-btn-clean\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6zm2-10h8v10H8zm7.5-5-1-1h-5l-1 1H5v2h14V4z\"/></svg>Clean 2.6 GB…</button> <button class=\"ds-btn-clean\" disabled>Nothing picked</button>",
+      "css": ".ds-btn-clean{display:inline-flex;align-items:center;gap:8px;background:#5B3C8C;color:#FFFFFF;font:600 14px 'Segoe UI', system-ui, sans-serif;padding:16px 20px;border:none;border-radius:6px;cursor:pointer;transition:background .15s}.ds-btn-clean:hover{background:#4E3279}.ds-btn-clean:focus-visible{outline:2px solid #2B2A27;outline-offset:2px}.ds-btn-clean:active{background:#43296B}.ds-btn-clean:disabled{background:#DDD8CC;color:#6B6862;cursor:default}"
+    },
+    {
+      "name": "Outlined Ink Button",
+      "kind": "button",
+      "refersTo": "button-outline-ink",
+      "description": "Secondary actions such as Play video; ink, deliberately not violet.",
+      "html": "<button class=\"ds-btn-ink\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M8 5v14l11-7z\"/></svg>Play video</button>",
+      "css": ".ds-btn-ink{display:inline-flex;align-items:center;gap:8px;background:transparent;color:#2B2A27;font:600 14px 'Segoe UI', system-ui, sans-serif;padding:14px 18px;border:1px solid #2B2A27;border-radius:20px;cursor:pointer;transition:background .15s}.ds-btn-ink:hover{background:rgba(43,42,39,.06)}.ds-btn-ink:focus-visible{outline:2px solid #2B2A27;outline-offset:2px}.ds-btn-ink:active{background:rgba(43,42,39,.12)}"
+    },
+    {
+      "name": "Tick Box",
+      "kind": "custom",
+      "refersTo": "tick-box",
+      "description": "22px square; violet with a white check when the item will be removed.",
+      "html": "<button class=\"ds-tick\" aria-pressed=\"false\" aria-label=\"Kept\"></button> <button class=\"ds-tick ds-tick-on\" aria-pressed=\"true\" aria-label=\"Will be removed\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#FFFFFF\" d=\"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z\"/></svg></button>",
+      "css": ".ds-tick{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;background:#FBFAF6;border:1.5px solid #6B6862;border-radius:3px;cursor:pointer;transition:background .12s,border-color .12s}.ds-tick:hover{background:#ECE8DE}.ds-tick:focus-visible{outline:2px solid #2B2A27;outline-offset:2px}.ds-tick-on,.ds-tick-on:hover{background:#5B3C8C;border-color:#5B3C8C}"
+    },
+    {
+      "name": "REMOVE Stamp",
+      "kind": "custom",
+      "refersTo": "remove-stamp",
+      "description": "Violet hand-pressed stamp on ticked cards, bottom-left of the picture, -8 degrees.",
+      "html": "<span class=\"ds-stamp\">REMOVE</span>",
+      "css": ".ds-stamp{display:inline-block;transform:rotate(-8deg);padding:1px 6px;background:rgba(251,250,246,.85);border:1.5px solid rgba(91,60,140,.9);border-radius:2px;color:#5B3C8C;font:700 12px Consolas, ui-monospace, monospace;letter-spacing:1.6px}"
+    },
+    {
+      "name": "Suggestion Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Picture, one typed reason, size and date in fixed cells; red top rule; ink border on focus.",
+      "html": "<div class=\"ds-card\" tabindex=\"0\"><div class=\"ds-card-rule\"></div><div class=\"ds-card-pic\"><span class=\"ds-card-stamp\">REMOVE</span><span class=\"ds-card-tick\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#FFFFFF\" d=\"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z\"/></svg></span></div><div class=\"ds-card-reason\">Chat with Nikhil on WhatsApp</div><div class=\"ds-card-meta\"><span>1.2 MB</span><span>4 Mar 2025</span></div></div>",
+      "css": ".ds-card{width:230px;height:268px;background:#FBFAF6;border:1px solid #DDD8CC;border-radius:3px;overflow:hidden;cursor:pointer;box-sizing:border-box}.ds-card:hover{border-color:#6B6862}.ds-card:focus-visible,.ds-card:focus{outline:none;border:2px solid #2B2A27}.ds-card-rule{height:3px;background:#C8382E}.ds-card-pic{position:relative;height:180px;margin:10px 10px 0;background:#ECE8DE;border-radius:2px}.ds-card-stamp{position:absolute;left:8px;bottom:10px;transform:rotate(-8deg);padding:1px 6px;background:rgba(251,250,246,.85);border:1.5px solid rgba(91,60,140,.9);border-radius:2px;color:#5B3C8C;font:700 12px Consolas, ui-monospace, monospace;letter-spacing:1.6px}.ds-card-tick{position:absolute;right:6px;top:6px;display:flex;align-items:center;justify-content:center;width:22px;height:22px;background:#5B3C8C;border-radius:3px}.ds-card-reason{padding:8px 10px 0;font:400 12.5px/1.35 Consolas, ui-monospace, monospace;color:#2B2A27;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-card-meta{display:flex;justify-content:space-between;padding:2px 10px 0;font:400 12.5px/1.35 Consolas, ui-monospace, monospace;color:#6B6862}"
+    },
+    {
+      "name": "How We Know Slip",
+      "kind": "card",
+      "refersTo": "slip",
+      "description": "Catalog slip: red top rule, blue-ruled rows, bold typed labels, typed values.",
+      "html": "<div class=\"ds-slip\"><div class=\"ds-slip-head\">How we know</div><div class=\"ds-slip-row\"><b>Why</b><span>Same picture as IMG_2041.jpg, kept</span></div><div class=\"ds-slip-row\"><b>Match</b><span>Fingerprint distance 2 of 64</span></div><div class=\"ds-slip-row\"><b>Where</b><span>DCIM/Camera</span></div></div>",
+      "css": ".ds-slip{max-width:400px;background:#FBFAF6;border:1px solid #DDD8CC;border-top:2px solid #C8382E;padding:12px 16px 14px}.ds-slip-head{font:700 14px 'Segoe UI', system-ui, sans-serif;color:#2B2A27;margin-bottom:6px}.ds-slip-row{display:flex;padding:6px 0;border-bottom:1px solid #E7EDF4;font:400 12.5px/1.35 Consolas, ui-monospace, monospace;color:#2B2A27}.ds-slip-row b{flex:0 0 130px;font-weight:700}"
+    },
+    {
+      "name": "Storage Bar",
+      "kind": "custom",
+      "refersTo": "capacity-bar",
+      "description": "Used space in ink; the share the pick frees in violet at its end; caption below.",
+      "html": "<div class=\"ds-cap\"><div class=\"ds-cap-bar\"><div class=\"ds-cap-used\"></div><div class=\"ds-cap-pick\"></div></div><div class=\"ds-cap-cap\">18.4 GB free · <b>2.6 GB picked</b> · 21.0 GB free after</div></div>",
+      "css": ".ds-cap{width:420px}.ds-cap-bar{position:relative;height:10px;background:#DDD8CC;border-radius:2px;overflow:hidden}.ds-cap-used{position:absolute;left:0;top:0;bottom:0;width:86%;background:#2B2A27}.ds-cap-pick{position:absolute;top:0;bottom:0;left:76%;width:10%;background:#5B3C8C;transition:left .26s cubic-bezier(.215,.61,.355,1),width .26s cubic-bezier(.215,.61,.355,1)}.ds-cap-cap{margin-top:5px;font:400 12px 'Segoe UI', system-ui, sans-serif;color:#6B6862}.ds-cap-cap b{color:#5B3C8C;font-weight:600}"
+    },
+    {
+      "name": "Rail Entry",
+      "kind": "nav",
+      "refersTo": "rail-entry",
+      "description": "A group in the review rail: name, typed size, ink size bar, typed count; active uses ink and Empty Frame.",
+      "html": "<div class=\"ds-rail\"><div class=\"ds-rail-h\">Sure to remove</div><a class=\"ds-rail-e ds-rail-on\" href=\"#\"><span class=\"ds-rail-r\"><span class=\"ds-rail-n\">Chat screenshots</span><span class=\"ds-rail-f\">1.8 GB</span></span><span class=\"ds-rail-r\"><span class=\"ds-rail-t\"><span class=\"ds-rail-b\" style=\"width:100%\"></span></span><span class=\"ds-rail-f\">40 of 52 picked</span></span></a><a class=\"ds-rail-e\" href=\"#\"><span class=\"ds-rail-r\"><span class=\"ds-rail-n\">Exact duplicates</span><span class=\"ds-rail-f\">640 MB</span></span><span class=\"ds-rail-r\"><span class=\"ds-rail-t\"><span class=\"ds-rail-b\" style=\"width:60%\"></span></span><span class=\"ds-rail-f\">118</span></span></a></div>",
+      "css": ".ds-rail{width:260px;background:#FBFAF6;border-right:1px solid #DDD8CC;padding:0 10px 16px}.ds-rail-h{padding:18px 12px 6px;font:600 12px 'Segoe UI', system-ui, sans-serif;color:#6B6862}.ds-rail-e{display:block;padding:9px 12px;border-radius:4px;text-decoration:none;color:#2B2A27;transition:background .12s}.ds-rail-e:hover{background:rgba(43,42,39,.05)}.ds-rail-e:focus-visible{outline:2px solid #2B2A27;outline-offset:-2px}.ds-rail-on,.ds-rail-on:hover{background:#ECE8DE}.ds-rail-r{display:flex;align-items:center;gap:10px}.ds-rail-r+.ds-rail-r{margin-top:5px}.ds-rail-n{flex:1;font:400 14px 'Segoe UI', system-ui, sans-serif}.ds-rail-on .ds-rail-n{font-weight:600}.ds-rail-f{font:400 12.5px/1.35 Consolas, ui-monospace, monospace;color:#6B6862}.ds-rail-t{flex:1}.ds-rail-b{display:block;height:3px;background:rgba(107,104,98,.45)}.ds-rail-on .ds-rail-b{background:#2B2A27}"
+    },
+    {
+      "name": "Top Bar",
+      "kind": "nav",
+      "refersTo": "top-bar",
+      "description": "68px paper band with a red rule beneath: wordmark, read-only note, phone, storage, main action.",
+      "html": "<header class=\"ds-top\"><span class=\"ds-top-w\">Declutter</span><span class=\"ds-top-ro\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#6B6862\" d=\"M18 8h-1V6A5 5 0 0 0 7 6v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2M8.9 6a3.1 3.1 0 0 1 6.2 0v2H8.9zM18 20H6V10h12zm-6-3a2 2 0 1 0 0-4 2 2 0 0 0 0 4\"/></svg>Read-only</span><span class=\"ds-top-m\">Samsung SM-A546E</span><span class=\"ds-top-sp\"></span><button class=\"ds-top-btn\">Clean 2.6 GB…</button></header>",
+      "css": ".ds-top{display:flex;align-items:center;height:68px;padding:0 24px;background:#FBFAF6;border-bottom:2px solid #C8382E;box-sizing:border-box}.ds-top-w{font:700 18px 'Segoe UI', system-ui, sans-serif;letter-spacing:-.2px;color:#2B2A27}.ds-top-ro{display:inline-flex;align-items:center;gap:4px;margin-left:12px;font:400 12px 'Segoe UI', system-ui, sans-serif;color:#6B6862}.ds-top-m{margin-left:28px;font:400 14px 'Segoe UI', system-ui, sans-serif;color:#6B6862}.ds-top-sp{flex:1}.ds-top-btn{background:#5B3C8C;color:#FFFFFF;font:600 14px 'Segoe UI', system-ui, sans-serif;padding:16px 20px;border:none;border-radius:6px;cursor:pointer}.ds-top-btn:hover{background:#4E3279}.ds-top-btn:focus-visible{outline:2px solid #2B2A27;outline-offset:2px}"
+    },
+    {
+      "name": "Decision Strip",
+      "kind": "custom",
+      "refersTo": "decision-panel",
+      "description": "Detail-panel toggle: Desk when kept, Stamp Wash with violet text when it will be removed.",
+      "html": "<button class=\"ds-dec\"><span class=\"ds-dec-t\"></span><span><span class=\"ds-dec-a\">Kept  (Space to remove)</span><span class=\"ds-dec-b\">1.2 MB · For you to check</span></span></button> <button class=\"ds-dec ds-dec-on\"><span class=\"ds-dec-t\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path fill=\"#FFFFFF\" d=\"M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z\"/></svg></span><span><span class=\"ds-dec-a\">Will be removed  (Space to keep)</span><span class=\"ds-dec-b\">1.2 MB · Declutter is sure</span></span></button>",
+      "css": ".ds-dec{display:flex;align-items:center;gap:12px;width:360px;padding:12px;background:#F3F1EB;border:none;border-radius:4px;text-align:left;cursor:pointer;transition:background .12s}.ds-dec:hover{background:#ECE8DE}.ds-dec:focus-visible{outline:2px solid #2B2A27;outline-offset:2px}.ds-dec-t{display:flex;align-items:center;justify-content:center;flex:0 0 22px;height:22px;background:#FBFAF6;border:1.5px solid #6B6862;border-radius:3px;box-sizing:border-box}.ds-dec-on{background:#EFEBF6}.ds-dec-on:hover{background:#E6E0F0}.ds-dec-on .ds-dec-t{background:#5B3C8C;border-color:#5B3C8C}.ds-dec-a{display:block;font:600 14px 'Segoe UI', system-ui, sans-serif;color:#2B2A27;white-space:pre}.ds-dec-on .ds-dec-a{color:#5B3C8C}.ds-dec-b{display:block;font:400 12.5px/1.35 Consolas, ui-monospace, monospace;color:#6B6862}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Librarian's Weeding Round",
+    "overview": "Removing things from a phone is treated as a librarian weeding a collection: every suggestion is a catalog card with a typed reason, a fuller slip sits behind it on demand, and only cards pressed with the violet REMOVE stamp leave. The ground is a pale desk; cards, rail and panels are cream catalog stock edged with a thin buff line; type is ink. The world refuses the generic phone-cleaner grid of bright blue checkmarks, rounded tiles and alarm-red warnings. Nothing is playful and nothing is hidden: the picture and the proof are always one glance away.\n\nDensity is high but calm. A big-screen review shows a rail of groups, a grid of cards and a large focused item at once, held together by one small typed size for every fact, ink for anything that is navigation or focus, and violet reserved for exactly one meaning. The interface face (Segoe UI) speaks in sentences; the typed face (Consolas) records facts: sizes, dates, reasons, evidence.\n\nThe theme is light only, on purpose. Photos are judged on paper, the way a printed contact sheet is judged, and a dark ground would change how sharpness and colour read.",
+    "keyCharacteristics": [
+      "Catalog-card paper on a pale desk, ink type, no shadows.",
+      "A red top rule marks every card and slip; it is a material mark, never a warning.",
+      "Violet stamp-pad ink means \"will be removed\" and nothing else.",
+      "Facts are typed at one size (12.5px Consolas); rank comes from weight and ink.",
+      "Small, nearly square corners (2-6px); flat, edged surfaces.",
+      "Light theme only."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink of Removal Rule",
+        "body": "Violet (#5B3C8C) appears only where something will be removed: selection, the REMOVE stamp, the Clean button, the picked part of the storage bar. If an element does not mean \"this leaves the phone\", it is not violet.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Leads Rule",
+        "body": "Focus, the active navigation item and the kept original use ink, never violet. The focused card gets a 2px ink border; the active rail entry gets an ink bar and the Empty Frame ground.",
+        "section": "colors"
+      },
+      {
+        "name": "The Printed Rule Rule",
+        "body": "The red rule (#C8382E) is printed on every card and slip and is never used for warnings, errors, progress or data bars. Size bars in the rail are ink or faded ink, because red reads as danger in a deletion app.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Only Rule",
+        "body": "Light theme only. Photos are judged on paper; there is no dark variant.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Fact Size Rule",
+        "body": "Every item fact is typed at 12.5px Consolas. A card's reason, its size and date, a slip's evidence and the rail's counts share one size; rank comes from weight (700 vs 400) and ink (ink vs faded ink), never from size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Sentence and Typewriter Rule",
+        "body": "Sentences are set in Segoe UI; facts are typed in Consolas. A slip row switches to Segoe UI only when its value is a sentence (guide steps), never for a figure.",
+        "section": "typography"
+      },
+      {
+        "name": "The Fixed Cells Rule",
+        "body": "Card facts sit in fixed positions (reason on one line, size left and date right below it) and slip rows use a fixed label column (130px by default), so the eye scans down a column of facts like a timetable.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Stationery Rule",
+        "body": "Cards and slips are paper on a desk: edged, never floating. Show state with ink, fills and the stamp, not shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** reserve Stamp-Pad Violet (#5B3C8C) for removal only: ticked boxes, the REMOVE stamp, the Clean button, the picked part of the storage bar.",
+      "**Do** show focus and the active navigation item in ink (#2B2A27): a 2px ink border on the focused card, an ink bar on the active rail entry.",
+      "**Do** print the red rule (#C8382E) across the top of every card (3px) and slip (2px).",
+      "**Do** type every item fact at 12.5px Consolas and rank facts by weight and ink, not size.",
+      "**Do** crop card thumbnails from the top.",
+      "**Do** keep the REMOVE stamp in the bottom-left corner of the picture.",
+      "**Do** keep surfaces flat: paper on desk, 1px Buff Edge lines, no shadows."
+    ],
+    "donts": [
+      "**Don't** use violet for focus, hover, navigation selection, progress, links or neutral actions.",
+      "**Don't** use the red rule colour for warnings, errors, progress or data bars.",
+      "**Don't** add a dark theme; photos are judged on paper.",
+      "**Don't** place the stamp, or anything else, over the part of a picture the user reads to decide.",
+      "**Don't** introduce a second fact size or set figures in the interface face.",
+      "**Don't** use rounded tiles, bright blue checkmarks or other generic phone-cleaner styling."
+    ]
+  }
+}
