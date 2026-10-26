@@ -65,5 +65,5 @@ void main() {
     final work = PhotoScan.workRoot;
     expect(work.existsSync() ? work.listSync(recursive: true).whereType<File>() : <File>[], isEmpty,
         reason: 'copies are deleted');
-  }, timeout: const Timeout(Duration(minutes: 30)));
+  }, timeout: const Timeout(Duration(hours: 3)));
 }

@@ -251,7 +251,8 @@ class PhotoScan extends ChangeNotifier {
       for (Directory d = start.absolute; d.path != d.parent.path; d = d.parent) {
         if (!Directory('${d.path}\\.git').existsSync()) continue;
         final dev = File('${d.path}\\packages\\vision_helper\\bin\\PruneVision.exe');
-        return dev.existsSync() ? dev.path : null;
+        if (dev.existsSync()) return dev.path;
+        break; // the nearest checkout only (tests run from inside Flutter's own)
       }
     }
     return null;
