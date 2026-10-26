@@ -26,6 +26,7 @@ MinVersion=10.0
 OutputDir=..\dist
 OutputBaseFilename=Prune-beta-Setup
 UninstallDisplayIcon={app}\Prune.exe
+SetupIconFile=..\apps\declutter\windows\runner\resources\app_icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern

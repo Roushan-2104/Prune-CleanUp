@@ -110,8 +110,6 @@ Send us:
   phone itself.
 - HEIC photos (often ones sent from iPhones) are skipped unless Windows has
   Microsoft's HEIF and HEVC extensions installed.
-- The app icon is a placeholder.
-
 ## If something goes wrong
 
 - **"Plug in your Android phone" doesn't go away:** try another cable or
