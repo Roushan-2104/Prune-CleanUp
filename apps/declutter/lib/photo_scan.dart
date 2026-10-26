@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:declutter_engine/declutter_engine.dart';
 import 'package:declutter_store/declutter_store.dart';
@@ -57,7 +58,10 @@ class PhotoScan extends ChangeNotifier {
       };
 
   /// How many images still need checking (new or changed since last time).
-  int pending() {
+  int pending() => running ? total - done : _pending ??= _countPending();
+  int? _pending; // remembered between runs; Home asks on every redraw
+
+  int _countPending() {
     final images = imagesOf(_files);
     return store.needingAnalysis(serial).where(images.containsKey).length;
   }
@@ -78,6 +82,17 @@ class PhotoScan extends ChangeNotifier {
     return judgeImages(measured, images, installedPackages: installedApps);
   }
 
+  /// [judge] on a background thread (only the database read stays here):
+  /// with 16,000+ photos it takes seconds, which froze the window.
+  Future<Map<String, FileVerdict>> judgeInBackground(List<PhoneFile> files, {List<String> installedApps = const []}) {
+    final images = imagesOf(files);
+    final measured = {
+      for (final MapEntry(key: p, value: a) in store.measurements(serial).entries)
+        if (images.containsKey(p)) p: a,
+    };
+    return Isolate.run(() => judgeImages(measured, images, installedPackages: installedApps));
+  }
+
   Future<void> run(List<PhoneFile> files) async {
     if (running) return;
     _files = files;
@@ -88,6 +103,7 @@ class PhotoScan extends ChangeNotifier {
       return;
     }
     running = true;
+    _pending = null;
     _stop = false;
     error = null;
     done = 0;
@@ -127,6 +143,7 @@ class PhotoScan extends ChangeNotifier {
       await next?.then((_) {}, onError: (_) {}); // never delete under a copy in progress
       if (work.existsSync()) work.deleteSync(recursive: true);
       running = false;
+      _pending = null; // recounted on next ask
       _clock.stop();
       notifyListeners();
     }

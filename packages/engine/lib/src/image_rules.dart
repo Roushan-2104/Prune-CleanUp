@@ -68,10 +68,17 @@ bool mightBeScreenshot(ImageFacts f) {
 /// alone isn't enough — photos of posters, notes and certificates have that
 /// too. It needs the screenshot folder, a phone-screen shape, the phone's
 /// status bar, or an app screen the rules recognise (receipt, chat, OTP).
-bool looksLikeScreenshot(ImageFacts f, String? text, {int? width, int? height}) {
-  if (isScreenshotByPlace(f) || isPhoneScreenShaped(f.width ?? width, f.height ?? height)) return true;
-  if (text == null || text.trim().isEmpty) return false;
-  return hasStatusBar(text) || classifyScreenshotText(text).category != JunkCategory.otherScreenshot;
+bool looksLikeScreenshot(ImageFacts f, String? text, {int? width, int? height}) =>
+    screenshotVerdict(f, text, width: width, height: height) != null;
+
+/// What a screenshot shows, or null when the image isn't one. Reads the text
+/// once for both questions (it used to be read twice per image).
+Verdict? screenshotVerdict(ImageFacts f, String? text, {int? width, int? height}) {
+  final byShape = isScreenshotByPlace(f) || isPhoneScreenShaped(f.width ?? width, f.height ?? height);
+  if (!byShape && (text == null || text.trim().isEmpty)) return null;
+  final v = classifyScreenshotText(text ?? '');
+  if (byShape || hasStatusBar(text!) || v.category != JunkCategory.otherScreenshot) return v;
+  return null;
 }
 
 /// Judges analysed images: screenshot categories, blurry photos, and
@@ -92,9 +99,11 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
 
     // Decided again from the saved text, so better rules apply without
     // copying anything from the phone again.
-    final screenshot = a.text != null ? looksLikeScreenshot(f, a.text) : a.screenshot;
-    if (screenshot) {
-      var v = classifyScreenshotText(a.text ?? '');
+    final read = a.text != null
+        ? screenshotVerdict(f, a.text)
+        : (a.screenshot ? classifyScreenshotText('') : null);
+    if (read != null) {
+      var v = read;
       if (!isScreenshotByPlace(f)) v = Verdict(v.category, v.confidence,
           ['Screenshot saved or received from another app', ...v.reasons], label: v.label, evidence: v.evidence);
       shots[path] = (v, a.text ?? '');

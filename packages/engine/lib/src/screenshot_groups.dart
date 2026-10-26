@@ -1,3 +1,4 @@
+import 'text_rules.dart' show wholeWord;
 import 'verdict.dart';
 
 /// Finer groups for screenshots, found from the screenshots themselves:
@@ -224,10 +225,10 @@ String? screenSource(String rawText, [Set<String> installedApps = const {}]) {
     if (site.length >= 6) return site;
   }
   for (final MapEntry(key: word, value: name) in _brands.entries) {
-    if (RegExp('\\b${RegExp.escape(word)}\\b').hasMatch(text)) return name;
+    if (wholeWord(word).hasMatch(text)) return name;
   }
   for (final app in installedApps) {
-    if (RegExp('\\b${RegExp.escape(app)}\\b').hasMatch(text)) return _brands[app] ?? app[0].toUpperCase() + app.substring(1);
+    if (wholeWord(app).hasMatch(text)) return _brands[app] ?? app[0].toUpperCase() + app.substring(1);
   }
   return null;
 }

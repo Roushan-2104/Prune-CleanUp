@@ -25,7 +25,7 @@ class HomePage extends StatelessWidget {
         listenable: session,
         builder: (context, _) {
           final ready = session.state == LinkState.ready && session.info != null && session.summary != null;
-          final pick = ready ? _Pick(session) : null;
+          final pick = ready ? _Pick.of(session) : null;
           return Column(
             children: [
               TopBar(
@@ -106,6 +106,10 @@ class _Pick {
     picked.sort((a, b) => b.sureBytes.compareTo(a.sureBytes));
     check.sort((a, b) => b.bytes.compareTo(a.bytes));
   }
+
+  /// Worked out once per set of suggestions, not on every redraw.
+  static _Pick of(PhoneSession session) => _cache[session.suggestions] ??= _Pick(session);
+  static final _cache = Expando<_Pick>();
 
   final picked = <_Row>[];
   final check = <_Row>[];

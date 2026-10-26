@@ -186,7 +186,8 @@ class PhoneSession extends ChangeNotifier {
 
     _stopPhotos();
     photos = PhotoScan(adb: _adb!, serial: s, store: store)..addListener(_onPhotos);
-    _merge(files);
+    _step('Sorting photos and screenshots…');
+    await _rejudge();
     _set(LinkState.ready);
     unawaited(photos!.run(files));
   }
@@ -198,14 +199,35 @@ class PhoneSession extends ChangeNotifier {
     final progress = p.running ? p.done : -2;
     if (progress != _photosDone) {
       _photosDone = progress;
-      _merge(summary!.files);
+      unawaited(_rejudge());
     }
     notifyListeners();
   }
 
-  void _merge(List<PhoneFile> files) {
-    suggestions = mergeSuggestions(_fileLevel, photos?.judge(files, installedApps: _apps) ?? {});
-    needAnalysis = store.needingAnalysis(serial!).length;
+  bool _judging = false, _judgeAgain = false;
+
+  /// Re-judges every measured photo on a background thread, so the window
+  /// never freezes. Calls that arrive meanwhile fold into one more run.
+  Future<void> _rejudge() async {
+    if (_judging) {
+      _judgeAgain = true;
+      return;
+    }
+    _judging = true;
+    try {
+      do {
+        _judgeAgain = false;
+        final p = photos, s = serial, files = summary?.files;
+        if (p == null || s == null || files == null) return;
+        final images = await p.judgeInBackground(files, installedApps: _apps);
+        if (!identical(p, photos) || serial != s) return; // the phone changed meanwhile
+        suggestions = mergeSuggestions(_fileLevel, images);
+        needAnalysis = store.needingAnalysis(s).length;
+        notifyListeners();
+      } while (_judgeAgain);
+    } finally {
+      _judging = false;
+    }
   }
 
   void _stopPhotos() {

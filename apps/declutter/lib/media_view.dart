@@ -10,7 +10,7 @@ import 'review_media.dart';
 
 /// Small square preview for list rows: the photo itself, a frame from the
 /// video, or an icon. Fetched only when the row is on screen.
-class FileThumb extends StatelessWidget {
+class FileThumb extends StatefulWidget {
   const FileThumb({super.key, required this.file, required this.media, this.size = 56, this.fill = false});
   final PhoneFile file;
   final ReviewMedia? media;
@@ -20,7 +20,36 @@ class FileThumb extends StatelessWidget {
   final bool fill;
 
   @override
+  State<FileThumb> createState() => _FileThumbState();
+}
+
+class _FileThumbState extends State<FileThumb> {
+  // Asked for once per file, not on every redraw (that restarted the
+  // request each time and made thumbnails flicker).
+  Future<File?>? _image;
+  Future<Uint8List?>? _frame;
+
+  void _ask() {
+    final m = widget.media, f = widget.file;
+    _image = m != null && f.isImage ? m.previews.get(f) : null;
+    _frame = m != null && f.isVideo ? m.thumbnail(f) : null;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ask();
+  }
+
+  @override
+  void didUpdateWidget(FileThumb old) {
+    super.didUpdateWidget(old);
+    if (old.file.path != widget.file.path || old.media != widget.media) _ask();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final file = widget.file, size = widget.size, fill = widget.fill;
     final c = Theme.of(context).colorScheme;
     final cache = fill ? 520 : (size * 2).round();
     Widget box(Widget child) => ClipRRect(
@@ -32,11 +61,10 @@ class FileThumb extends StatelessWidget {
         child: child,
       ),
     );
-    final m = media;
-    if (m != null && file.isImage) {
+    if (_image case final image?) {
       return box(
         FutureBuilder<File?>(
-          future: m.previews.get(file),
+          future: image,
           builder: (context, snap) => snap.data == null
               ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
               : Image.file(
@@ -50,10 +78,10 @@ class FileThumb extends StatelessWidget {
         ),
       );
     }
-    if (m != null && file.isVideo) {
+    if (_frame case final frame?) {
       return box(
         FutureBuilder<Uint8List?>(
-          future: m.thumbnail(file),
+          future: frame,
           builder: (context, snap) => Stack(
             fit: StackFit.expand,
             children: [

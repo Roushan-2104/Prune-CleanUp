@@ -125,16 +125,22 @@ PaymentInfo extractPaymentInfo(String rawText) {
 
 // ---------------------------------------------------------------------------
 
+final _wholeWords = <String, RegExp>{};
+
+/// `\bword\b`, compiled once per word: building a RegExp is far slower
+/// than running one, and these run over thousands of screenshots.
+RegExp wholeWord(String w) => _wholeWords[w] ??= RegExp('\\b${RegExp.escape(w)}\\b');
+
 String _normalize(String s) => s.toLowerCase().replaceAll(RegExp(r'[ \t]+'), ' ');
 
 bool _any(String text, List<String> phrases) => phrases.any(text.contains);
 
 /// Like [_any] but whole words only, so "cred" doesn't match "credited".
 bool _anyWord(String text, List<String> words) =>
-    words.any((w) => RegExp('\\b${RegExp.escape(w)}\\b').hasMatch(text));
+    words.any((w) => wholeWord(w).hasMatch(text));
 
 int _countWords(String text, List<String> words) =>
-    words.where((w) => RegExp('\\b${RegExp.escape(w)}\\b').hasMatch(text)).length;
+    words.where((w) => wholeWord(w).hasMatch(text)).length;
 
 // Amounts in any common currency, symbol or code first ("$25.00", "₹250",
 // "usd 40") or after ("45,20 €", "120 eur"). OCR often reads "₹" as "rs",
@@ -212,7 +218,7 @@ Verdict? _payment(String text) {
   final upi = _upiId.firstMatch(text)?.group(0);
   final hasApp = _anyWord(text, _paymentApps);
   final appName = _paymentAppNames.entries
-      .where((e) => RegExp('\\b${RegExp.escape(e.key)}\\b').hasMatch(text))
+      .where((e) => wholeWord(e.key).hasMatch(text))
       .map((e) => e.value)
       .firstOrNull;
 
@@ -330,7 +336,7 @@ Verdict? _chat(String text) {
   var signs = 0, appRank = 0;
   final appFound = <String>[];
   for (final a in chatApps) {
-    final hasBrand = a.brands.any((w) => RegExp('\\b${RegExp.escape(w)}\\b').hasMatch(text));
+    final hasBrand = a.brands.any((w) => wholeWord(w).hasMatch(text));
     final phrases = a.phrases.where(text.contains).toList();
     final marks = a.pattern?.allMatches(text).length ?? 0;
     final s = phrases.length + (marks >= 2 ? 1 : 0);

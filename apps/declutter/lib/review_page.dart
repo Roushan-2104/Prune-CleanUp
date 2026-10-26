@@ -55,6 +55,62 @@ class ReviewPage extends StatefulWidget {
 
 typedef _Entry = MapEntry<String, FileVerdict>;
 
+/// The suggestions arranged for Review, built once per change.
+class _Index {
+  _Index(Map<String, FileVerdict> suggestions, Map<String, PhoneFile> files) {
+    final sureBytes = <JunkCategory, int>{}, allBytes = <JunkCategory, int>{};
+    final byCat = <JunkCategory, List<_Entry>>{};
+    for (final e in suggestions.entries) {
+      final f = files[e.key];
+      if (f == null) continue; // no longer on the phone
+      final c = e.value.verdict.category;
+      (byCat[c] ??= []).add(e);
+      allBytes.update(c, (v) => v + f.bytes, ifAbsent: () => f.bytes);
+      if (e.value.verdict.tier == Tier.sure) sureBytes.update(c, (v) => v + f.bytes, ifAbsent: () => f.bytes);
+    }
+    sure.addAll(sureBytes.keys);
+    categories.addAll(allBytes.keys.toList()
+      ..sort((a, b) {
+        final sa = sureBytes[a], sb = sureBytes[b];
+        if ((sa == null) != (sb == null)) return sa == null ? 1 : -1;
+        return sa != null ? sb!.compareTo(sa) : allBytes[b]!.compareTo(allBytes[a]!);
+      }));
+    for (final MapEntry(key: c, value: list) in byCat.entries) {
+      final groupBytes = <String?, int>{};
+      for (final e in list) {
+        groupBytes.update(_ReviewPageState._groupOf(e), (b) => b + files[e.key]!.bytes,
+            ifAbsent: () => files[e.key]!.bytes);
+      }
+      list.sort((a, b) {
+        final ga = _ReviewPageState._groupOf(a), gb = _ReviewPageState._groupOf(b);
+        if (ga != gb) {
+          // Named groups first; catch-alls ("Other WhatsApp chats") last.
+          final oa = ga == null || ga.startsWith('Other '), ob = gb == null || gb.startsWith('Other ');
+          if (oa != ob) return oa ? 1 : -1;
+          final byBytes = groupBytes[gb]!.compareTo(groupBytes[ga]!);
+          return byBytes != 0 ? byBytes : ga!.compareTo(gb!);
+        }
+        return files[b.key]!.bytes.compareTo(files[a.key]!.bytes);
+      });
+      items[c] = list;
+      final g = <String?, List<_Entry>>{};
+      for (final e in list) {
+        (g[_ReviewPageState._groupOf(e)] ??= []).add(e);
+      }
+      groups[c] = g;
+      if (g.length > 1 || g.keys.single != null) split.add(c);
+      bytes[c] = allBytes[c]!;
+    }
+  }
+
+  final categories = <JunkCategory>[];
+  final sure = <JunkCategory>{};
+  final split = <JunkCategory>{};
+  final items = <JunkCategory, List<_Entry>>{};
+  final groups = <JunkCategory, Map<String?, List<_Entry>>>{};
+  final bytes = <JunkCategory, int>{};
+}
+
 class _ReviewPageState extends State<ReviewPage> {
   late final Selection selection = Selection(widget.session.suggestions);
   late final ReviewMedia? media = widget.session.serial == null
@@ -84,27 +140,29 @@ class _ReviewPageState extends State<ReviewPage> {
     return _byPath;
   }
 
-  /// Suggestions whose file is in the current listing.
-  Iterable<_Entry> get _live => widget.session.suggestions.entries.where((e) => byPath.containsKey(e.key));
+  // Everything derived from the suggestions — order, groups, sizes — is
+  // worked out once when they change (a re-read, a photo-check batch), never
+  // per redraw: with ~25,000 suggestions that took seconds per frame.
+  _Index? _index;
+  Map<String, FileVerdict>? _indexedSuggestions;
+  Map<String, PhoneFile>? _indexedFiles;
+
+  _Index get index {
+    final s = widget.session.suggestions, files = byPath;
+    if (_index == null || !identical(s, _indexedSuggestions) || !identical(files, _indexedFiles)) {
+      _indexedSuggestions = s;
+      _indexedFiles = files;
+      _index = _Index(s, files);
+    }
+    return _index!;
+  }
 
   /// Groups in the order Home lists them: sure ones by the space their sure
   /// items free, then the rest by size.
-  List<JunkCategory> get categories {
-    final sure = <JunkCategory, int>{}, all = <JunkCategory, int>{};
-    for (final e in _live) {
-      final c = e.value.verdict.category, b = byPath[e.key]!.bytes;
-      all.update(c, (v) => v + b, ifAbsent: () => b);
-      if (e.value.verdict.tier == Tier.sure) sure.update(c, (v) => v + b, ifAbsent: () => b);
-    }
-    return all.keys.toList()..sort((a, b) {
-      final sa = sure[a], sb = sure[b];
-      if ((sa == null) != (sb == null)) return sa == null ? 1 : -1;
-      return sa != null ? sb!.compareTo(sa) : all[b]!.compareTo(all[a]!);
-    });
-  }
+  List<JunkCategory> get categories => index.categories;
 
   /// A group belongs under "Sure to remove" when Declutter is sure of some of it.
-  bool isSureGroup(JunkCategory c) => itemsIn(c).any((e) => e.value.verdict.tier == Tier.sure);
+  bool isSureGroup(JunkCategory c) => index.sure.contains(c);
 
   JunkCategory? get current {
     final cats = categories;
@@ -116,30 +174,39 @@ class _ReviewPageState extends State<ReviewPage> {
 
   /// Biggest first, kept together by app ("WhatsApp chats", "PhonePe
   /// payments"…) with the biggest group on top, as the list shows them.
-  List<_Entry> itemsIn(JunkCategory? c) {
-    final items = _live.where((e) => e.value.verdict.category == c).toList();
-    final groupBytes = <String?, int>{};
-    for (final e in items) {
-      groupBytes.update(_groupOf(e), (b) => b + byPath[e.key]!.bytes, ifAbsent: () => byPath[e.key]!.bytes);
-    }
-    return items..sort((a, b) {
-      final ga = _groupOf(a), gb = _groupOf(b);
-      if (ga != gb) {
-        // Named groups first; catch-alls ("Other WhatsApp chats") last.
-        final oa = ga == null || ga.startsWith('Other '), ob = gb == null || gb.startsWith('Other ');
-        if (oa != ob) return oa ? 1 : -1;
-        final byBytes = groupBytes[gb]!.compareTo(groupBytes[ga]!);
-        return byBytes != 0 ? byBytes : ga!.compareTo(gb!);
-      }
-      return byPath[b.key]!.bytes.compareTo(byPath[a.key]!.bytes);
-    });
-  }
+  List<_Entry> itemsIn(JunkCategory? c) => index.items[c] ?? const [];
 
   /// The sub-group a card sits in: the kept original for copies, else the
   /// verdict's label ("Nikhil · WhatsApp").
   static String? _groupOf(_Entry e) => e.value.matchPath != null ? 'keep:${e.value.matchPath}' : e.value.verdict.label;
 
   int bytesOf(Iterable<String> paths) => paths.fold(0, (s, p) => s + (byPath[p]?.bytes ?? 0));
+
+  // Sub-groups start closed, so a whole category reads at a glance
+  // ("Nikhil · WhatsApp", "Memes", "LeetCode"…); open one to see its cards.
+  final _open = <JunkCategory, Set<String?>>{};
+
+  /// Whether a category is split into sub-groups at all.
+  bool isSplit(JunkCategory c) => index.split.contains(c);
+
+  /// A category's sub-groups in list order, each with its cards.
+  Map<String?, List<_Entry>> groupsIn(JunkCategory c) => index.groups[c] ?? const {};
+
+  bool isOpen(JunkCategory c, String? group) => _open[c]?.contains(group) ?? false;
+
+  void toggleGroup(JunkCategory c, String? group) => setState(() {
+    final s = _open.putIfAbsent(c, () => {});
+    if (!s.remove(group)) s.add(group);
+  });
+
+  void setAllOpen(JunkCategory c, Iterable<String?> groups, bool open) => setState(() {
+    open ? _open.putIfAbsent(c, () => {}).addAll(groups) : _open.remove(c);
+    if (!open) focused = null;
+  });
+
+  /// The cards on screen, in order: what the arrow keys move through.
+  List<_Entry> visible(JunkCategory c, List<_Entry> items) =>
+      isSplit(c) ? [for (final MapEntry(key: g, value: m) in groupsIn(c).entries) if (isOpen(c, g)) ...m] : items;
 
   void show(JunkCategory c) => setState(() {
     _current = c;
@@ -244,15 +311,16 @@ class _ReviewPageState extends State<ReviewPage> {
       );
     }
     final items = itemsIn(current);
+    final shown = visible(current, items);
     final focusedEntry = items.where((e) => e.key == focused).firstOrNull;
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.keyA, control: true): () =>
             selection.setAll(items.map((e) => e.key), true),
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _move(items, 1),
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _move(items, -1),
-        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(items, columns),
-        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(items, -columns),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _move(shown, 1),
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _move(shown, -1),
+        const SingleActivator(LogicalKeyboardKey.arrowDown): () => _move(shown, columns),
+        const SingleActivator(LogicalKeyboardKey.arrowUp): () => _move(shown, -columns),
         const SingleActivator(LogicalKeyboardKey.space): () {
           if (focusedEntry != null) selection.toggle(focusedEntry.key);
         },
@@ -314,7 +382,7 @@ class _Rail extends StatelessWidget {
     final cats = state.categories;
     final sure = cats.where(state.isSureGroup).toList();
     final check = cats.where((c) => !state.isSureGroup(c)).toList();
-    final sizes = {for (final c in cats) c: state.bytesOf(state.itemsIn(c).map((e) => e.key))};
+    final sizes = {for (final c in cats) c: state.index.bytes[c]!};
     final biggest = sizes.values.fold(1, math.max);
 
     Widget heading(String text) => Padding(
@@ -428,11 +496,9 @@ class _Group extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final paths = items.map((e) => e.key).toList();
-    final groups = <String?, List<_Entry>>{};
-    for (final e in items) {
-      groups.putIfAbsent(_ReviewPageState._groupOf(e), () => []).add(e);
-    }
-    final split = groups.length > 1 || groups.keys.single != null;
+    final groups = state.groupsIn(category);
+    final split = state.isSplit(category);
+    final anyOpen = split && groups.keys.any((g) => state.isOpen(category, g));
 
     return ListenableBuilder(
       listenable: state.selection,
@@ -441,7 +507,19 @@ class _Group extends StatelessWidget {
         final allPicked = picked == paths.length;
         return LayoutBuilder(
           builder: (context, box) {
-            state.columns = math.max(1, ((box.maxWidth - 2 * pad + gap) / (cardWidth + gap)).floor());
+            final cols = state.columns = math.max(1, ((box.maxWidth - 2 * pad + gap) / (cardWidth + gap)).floor());
+            // One flat list of rows — a group's line, or a row of cards — built
+            // lazily, so only what's on screen exists (and fetches previews).
+            final rows = <Object>[]; // String? group key (header) or List<_Entry> (cards)
+            for (final MapEntry(key: g, value: members) in groups.entries) {
+              if (split) rows.add(_HeaderRow(g, members));
+              if (!split || state.isOpen(category, g)) {
+                for (var i = 0; i < members.length; i += cols) {
+                  rows.add(members.sublist(i, math.min(i + cols, members.length)));
+                }
+                if (split) rows.add(const _Gap());
+              }
+            }
             // Windows already draws a scrollbar on every scrolling view.
             return CustomScrollView(
               slivers: [
@@ -475,6 +553,13 @@ class _Group extends StatelessWidget {
                             ],
                           ),
                         ),
+                        if (split)
+                          TextButton.icon(
+                            onPressed: () => state.setAllOpen(category, groups.keys, !anyOpen),
+                            icon: Icon(anyOpen ? Icons.unfold_less : Icons.unfold_more, size: 18),
+                            label: Text(anyOpen ? 'Collapse all' : 'Expand all'),
+                          ),
+                        const SizedBox(width: 8),
                         TextButton(
                           onPressed: () => state.selection.setAll(paths, !allPicked),
                           child: Text(allPicked ? 'Untick all' : 'Tick all  (Ctrl+A)'),
@@ -483,32 +568,41 @@ class _Group extends StatelessWidget {
                     ),
                   ),
                 ),
-                for (final MapEntry(key: g, value: members) in groups.entries) ...[
-                  if (split)
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(pad, 18, pad, 12),
-                      sliver: SliverToBoxAdapter(
-                        child: _GroupHeader(state: state, group: g, members: members),
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(pad, 8, pad, 32),
+                  sliver: SliverList.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (context, i) => switch (rows[i]) {
+                      _HeaderRow(:final group, :final members) => _GroupHeader(
+                        state: state,
+                        group: group,
+                        members: members,
+                        open: state.isOpen(category, group),
+                        onToggle: () => state.toggleGroup(category, group),
                       ),
-                    ),
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(pad, split ? 0 : 16, pad, 8),
-                    sliver: SliverGrid(
-                      // The same column count ↑ ↓ use, so they move straight up and down.
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: state.columns,
-                        mainAxisSpacing: gap,
-                        crossAxisSpacing: gap,
-                        mainAxisExtent: 268,
+                      _Gap() => const SizedBox(height: 4),
+                      // A row of cards. Same column count as ↑ ↓, so they move straight up and down.
+                      final List<_Entry> cards => Padding(
+                        padding: const EdgeInsets.only(top: gap),
+                        child: SizedBox(
+                          height: 268,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (var c = 0; c < cols; c++) ...[
+                                if (c > 0) const SizedBox(width: gap),
+                                Expanded(
+                                  child: c < cards.length ? _Card(state: state, entry: cards[c]) : const SizedBox(),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
                       ),
-                      delegate: SliverChildBuilderDelegate(
-                        (context, i) => _Card(state: state, entry: members[i]),
-                        childCount: members.length,
-                      ),
-                    ),
+                      _ => const SizedBox.shrink(),
+                    },
                   ),
-                ],
-                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                ),
               ],
             );
           },
@@ -538,58 +632,115 @@ class _Group extends StatelessWidget {
   };
 }
 
+/// List rows in [_Group]: a sub-group's line, and the space after an open one.
+class _HeaderRow {
+  const _HeaderRow(this.group, this.members);
+  final String? group;
+  final List<_Entry> members;
+}
+
+class _Gap {
+  const _Gap();
+}
+
+/// One sub-group's line: a chevron to open or close it, its name, count,
+/// size and how much of it is picked, and — while closed — a strip of
+/// small previews so the whole category can be scanned at once.
 class _GroupHeader extends StatelessWidget {
-  const _GroupHeader({required this.state, required this.group, required this.members});
+  const _GroupHeader({
+    required this.state,
+    required this.group,
+    required this.members,
+    required this.open,
+    required this.onToggle,
+  });
   final _ReviewPageState state;
   final String? group;
   final List<_Entry> members;
+  final bool open;
+  final VoidCallback onToggle;
+
+  static const _previews = 8;
 
   @override
   Widget build(BuildContext context) {
     final paths = members.map((e) => e.key).toList();
-    final allPicked = paths.every(state.selection.has);
+    final picked = paths.where(state.selection.has).length;
+    final allPicked = picked == paths.length;
     final kept = group != null && group!.startsWith('keep:') ? state.byPath[group!.substring(5)] : null;
+    final count = kept != null
+        ? '${formatCount(paths.length)} ${paths.length == 1 ? 'copy' : 'copies'}'
+        : formatCount(paths.length);
     return Container(
-      padding: const EdgeInsets.only(bottom: 8),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Tone.line)),
       ),
-      child: Row(
-        children: [
-          if (kept != null) ...[
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Tone.ink, width: 1.5),
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: FileThumb(file: kept, media: state.media, size: 44),
-            ),
-            const SizedBox(width: 12),
-          ],
-          Expanded(
-            child: Text.rich(
-              TextSpan(
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  TextSpan(
-                    text: kept != null ? 'Keeping ${kept.name}' : (group ?? 'Other'),
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  Icon(open ? Icons.expand_more : Icons.chevron_right, size: 22, color: Tone.ink),
+                  const SizedBox(width: 6),
+                  if (kept != null) ...[
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Tone.ink, width: 1.5),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: FileThumb(file: kept, media: state.media, size: 40),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Flexible(
+                    child: Text(
+                      kept != null ? 'Keeping ${kept.name}' : (group ?? 'Other'),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  TextSpan(
-                    text:
-                        '    ${kept != null ? '${paths.length} ${paths.length == 1 ? 'copy' : 'copies'}' : '${paths.length}'}'
-                        ' · ${formatBytes(state.bytesOf(paths))}',
-                    style: Typed.factMuted,
+                  const SizedBox(width: 16),
+                  Text('$count · ${formatBytes(state.bytesOf(paths))}', style: Typed.factMuted),
+                  const Spacer(),
+                  if (picked > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Text(
+                        allPicked ? 'all picked' : '${formatCount(picked)} picked',
+                        style: Typed.fact.copyWith(color: Tone.stamp),
+                      ),
+                    ),
+                  TextButton(
+                    onPressed: () => state.selection.setAll(paths, !allPicked),
+                    child: Text(allPicked ? 'Untick these' : 'Tick these'),
                   ),
                 ],
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
+              if (!open)
+                Padding(
+                  padding: const EdgeInsets.only(left: 28, top: 8),
+                  child: Row(
+                    children: [
+                      for (final e in members.take(_previews)) ...[
+                        Opacity(
+                          // Unpicked previews read lighter, so a group's mix shows at a glance.
+                          opacity: state.selection.has(e.key) ? 1 : 0.55,
+                          child: FileThumb(file: state.byPath[e.key]!, media: state.media, size: 52),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      if (members.length > _previews)
+                        Text('+${formatCount(members.length - _previews)} more', style: Typed.factMuted),
+                    ],
+                  ),
+                ),
+            ],
           ),
-          TextButton(
-            onPressed: () => state.selection.setAll(paths, !allPicked),
-            child: Text(allPicked ? 'Untick these' : 'Tick these'),
-          ),
-        ],
+        ),
       ),
     );
   }
