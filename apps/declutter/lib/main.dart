@@ -9,6 +9,7 @@ import 'home_page.dart';
 import 'phone_session.dart';
 import 'photo_scan.dart';
 import 'previews.dart';
+import 'theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,11 +18,13 @@ void main() {
   PhotoScan.clearWork();
   runApp(DeclutterApp(session: PhoneSession(Store.open(databasePath()))));
   // …and are deleted again when the window is closed.
-  _exitListener = AppLifecycleListener(onExitRequested: () async {
-    PreviewCache.clearAll();
-    PhotoScan.clearWork();
-    return AppExitResponse.exit;
-  });
+  _exitListener = AppLifecycleListener(
+    onExitRequested: () async {
+      PreviewCache.clearAll();
+      PhotoScan.clearWork();
+      return AppExitResponse.exit;
+    },
+  );
 }
 
 // Kept so the listener lives as long as the app.
@@ -41,12 +44,12 @@ class DeclutterApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF0B6E78);
+    // Light on purpose: photos and small screenshot text are judged most
+    // faithfully on a paper ground. See theme.dart.
     return MaterialApp(
       title: 'Declutter',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(colorSchemeSeed: seed, brightness: Brightness.dark, useMaterial3: true),
+      theme: declutterTheme(),
       home: HomePage(session: session),
     );
   }

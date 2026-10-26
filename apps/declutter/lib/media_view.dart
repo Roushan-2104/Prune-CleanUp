@@ -11,38 +11,64 @@ import 'review_media.dart';
 /// Small square preview for list rows: the photo itself, a frame from the
 /// video, or an icon. Fetched only when the row is on screen.
 class FileThumb extends StatelessWidget {
-  const FileThumb({super.key, required this.file, required this.media, this.size = 56});
+  const FileThumb({super.key, required this.file, required this.media, this.size = 56, this.fill = false});
   final PhoneFile file;
   final ReviewMedia? media;
   final double size;
 
+  /// Fill the space given instead of a [size] square (cards in a grid).
+  final bool fill;
+
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
+    final cache = fill ? 520 : (size * 2).round();
     Widget box(Widget child) => ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Container(width: size, height: size, color: c.surfaceContainerHighest, child: child),
-        );
+      borderRadius: BorderRadius.circular(fill ? 2 : 8),
+      child: Container(
+        width: fill ? double.infinity : size,
+        height: fill ? double.infinity : size,
+        color: c.surfaceContainerHighest,
+        child: child,
+      ),
+    );
     final m = media;
     if (m != null && file.isImage) {
-      return box(FutureBuilder<File?>(
-        future: m.previews.get(file),
-        builder: (context, snap) => snap.data == null
-            ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
-            : Image.file(snap.data!, fit: BoxFit.cover, cacheWidth: (size * 2).round(), gaplessPlayback: true),
-      ));
+      return box(
+        FutureBuilder<File?>(
+          future: m.previews.get(file),
+          builder: (context, snap) => snap.data == null
+              ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
+              : Image.file(
+                  snap.data!,
+                  fit: BoxFit.cover,
+                  // Screenshots carry what matters at the top: the chat name, "Payment Successful".
+                  alignment: fill ? Alignment.topCenter : Alignment.center,
+                  cacheWidth: cache,
+                  gaplessPlayback: true,
+                ),
+        ),
+      );
     }
     if (m != null && file.isVideo) {
-      return box(FutureBuilder<Uint8List?>(
-        future: m.thumbnail(file),
-        builder: (context, snap) => Stack(fit: StackFit.expand, children: [
-          if (snap.data != null)
-            Image.memory(snap.data!, fit: BoxFit.cover, cacheWidth: (size * 2).round(), gaplessPlayback: true)
-          else
-            Icon(Icons.movie_outlined, color: c.onSurfaceVariant),
-          const Align(alignment: Alignment.bottomRight, child: Icon(Icons.play_circle, size: 18, color: Colors.white70)),
-        ]),
-      ));
+      return box(
+        FutureBuilder<Uint8List?>(
+          future: m.thumbnail(file),
+          builder: (context, snap) => Stack(
+            fit: StackFit.expand,
+            children: [
+              if (snap.data != null)
+                Image.memory(snap.data!, fit: BoxFit.cover, cacheWidth: cache, gaplessPlayback: true)
+              else
+                Icon(Icons.movie_outlined, color: c.onSurfaceVariant),
+              const Align(
+                alignment: Alignment.bottomRight,
+                child: Icon(Icons.play_circle, size: 18, color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     return box(Icon(iconFor(file), color: c.onSurfaceVariant));
   }
@@ -51,10 +77,10 @@ class FileThumb extends StatelessWidget {
 IconData iconFor(PhoneFile f) => f.isVideo
     ? Icons.movie_outlined
     : f.isImage
-        ? Icons.photo_outlined
-        : f.isAudio
-            ? Icons.graphic_eq
-            : Icons.description_outlined;
+    ? Icons.photo_outlined
+    : f.isAudio
+    ? Icons.graphic_eq
+    : Icons.description_outlined;
 
 /// Five frames spread across a video, so you can often decide without
 /// pressing Play. Tap a frame to play from there.
@@ -76,23 +102,27 @@ class Filmstrip extends StatelessWidget {
         builder: (context, snap) {
           final frames = snap.data;
           if (frames == null) {
-            return Center(child: Text('Getting frames…', style: TextStyle(color: c.onSurfaceVariant)));
+            return Center(
+              child: Text('Getting frames…', style: TextStyle(color: c.onSurfaceVariant)),
+            );
           }
           if (frames.isEmpty) return const SizedBox.shrink();
-          return Row(children: [
-            for (final (i, frame) in frames.indexed) ...[
-              if (i > 0) const SizedBox(width: 4),
-              Expanded(
-                child: InkWell(
-                  onTap: onTapFrame == null ? null : () => onTapFrame!(at[i]),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.memory(frame, fit: BoxFit.cover, height: 64, gaplessPlayback: true),
+          return Row(
+            children: [
+              for (final (i, frame) in frames.indexed) ...[
+                if (i > 0) const SizedBox(width: 4),
+                Expanded(
+                  child: InkWell(
+                    onTap: onTapFrame == null ? null : () => onTapFrame!(at[i]),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Image.memory(frame, fit: BoxFit.cover, height: 64, gaplessPlayback: true),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ]);
+          );
         },
       ),
     );
@@ -206,7 +236,9 @@ class MediaViewState extends State<MediaView> {
       debugPrint('[player] opening ${f.bytes <= ReviewMedia.smallFile ? 'local copy' : 'stream'} of ${f.name}');
       await player.open(Media(src), play: false);
       if (from > 0) {
-        final d = await player.stream.duration.firstWhere((d) => d > Duration.zero).timeout(const Duration(seconds: 10));
+        final d = await player.stream.duration
+            .firstWhere((d) => d > Duration.zero)
+            .timeout(const Duration(seconds: 10));
         await player.seek(d * from);
       }
       await player.play();
@@ -230,60 +262,81 @@ class MediaViewState extends State<MediaView> {
     Widget body;
     if (_player != null) {
       // Our own compact controls: the built-in ones don't fit narrow panels.
-      body = Column(children: [
-        Expanded(
-          child: _video != null
-              ? Video(controller: _video!, controls: NoVideoControls)
-              : Center(child: Icon(Icons.graphic_eq, size: 56, color: c.onSurfaceVariant)),
-        ),
-        PlayerBar(player: _player!),
-      ]);
+      body = Column(
+        children: [
+          Expanded(
+            child: _video != null
+                ? Video(controller: _video!, controls: NoVideoControls)
+                : Center(child: Icon(Icons.graphic_eq, size: 56, color: c.onSurfaceVariant)),
+          ),
+          PlayerBar(player: _player!),
+        ],
+      );
     } else if (widget.file.isImage) {
       body = FutureBuilder<File?>(
         future: _local,
         builder: (context, snap) => snap.connectionState != ConnectionState.done
             ? const Center(child: CircularProgressIndicator())
             : snap.data == null
-                ? const Center(child: Text('Preview not available'))
-                : InteractiveViewer(maxScale: 6, child: Image.file(snap.data!, fit: BoxFit.contain)),
+            ? const Center(child: Text('Preview not available'))
+            : InteractiveViewer(maxScale: 6, child: Image.file(snap.data!, fit: BoxFit.contain)),
       );
     } else if (_playable) {
       body = Center(
         child: _local == null
-            ? FilledButton.icon(
+            ? OutlinedButton.icon(
+                // Not violet: in Declutter violet only means "will be removed".
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: c.onSurface,
+                  side: BorderSide(color: c.onSurface),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                ),
                 onPressed: play,
                 icon: const Icon(Icons.play_arrow),
                 label: Text(widget.file.isVideo ? 'Play video' : 'Play audio'),
               )
-            : Column(mainAxisSize: MainAxisSize.min, children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 12),
-                Text(_status ?? 'Getting ready…'),
-              ]),
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 12),
+                  Text(_status ?? 'Getting ready…'),
+                ],
+              ),
       );
     } else {
       body = Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Icon(iconFor(widget.file), size: 48, color: c.onSurfaceVariant),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _openInWindows,
-            icon: const Icon(Icons.open_in_new),
-            label: const Text('Open in its usual app'),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(iconFor(widget.file), size: 48, color: c.onSurfaceVariant),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _openInWindows,
+              icon: const Icon(Icons.open_in_new),
+              label: const Text('Open in its usual app'),
+            ),
+          ],
+        ),
       );
     }
     if (error != null) {
       body = Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.error_outline, color: c.error),
-            const SizedBox(height: 8),
-            Text(error!, textAlign: TextAlign.center, style: TextStyle(color: c.error)),
-            TextButton(onPressed: play, child: const Text('Try again')),
-          ]),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline, color: c.error),
+              const SizedBox(height: 8),
+              Text(
+                error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.error),
+              ),
+              TextButton(onPressed: play, child: const Text('Try again')),
+            ],
+          ),
         ),
       );
     }
@@ -291,9 +344,8 @@ class MediaViewState extends State<MediaView> {
   }
 }
 
-String _mb(int bytes) => bytes >= 1 << 30
-    ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB'
-    : '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
+String _mb(int bytes) =>
+    bytes >= 1 << 30 ? '${(bytes / (1 << 30)).toStringAsFixed(1)} GB' : '${(bytes / (1 << 20)).toStringAsFixed(1)} MB';
 
 /// Play/pause, a progress bar you can drag, and "0:03 / 0:15".
 class PlayerBar extends StatelessWidget {
@@ -311,21 +363,24 @@ class PlayerBar extends StatelessWidget {
         builder: (context, _) {
           final s = player.state;
           final total = s.duration.inMilliseconds;
-          return Row(children: [
-            IconButton(
-              tooltip: s.playing ? 'Pause' : 'Play',
-              onPressed: () => s.completed ? player.seek(Duration.zero).then((_) => player.play()) : player.playOrPause(),
-              icon: Icon(s.playing ? Icons.pause : Icons.play_arrow),
-            ),
-            Expanded(
-              child: Slider(
-                value: total == 0 ? 0 : (s.position.inMilliseconds / total).clamp(0.0, 1.0),
-                onChanged: total == 0 ? null : (v) => player.seek(Duration(milliseconds: (v * total).round())),
+          return Row(
+            children: [
+              IconButton(
+                tooltip: s.playing ? 'Pause' : 'Play',
+                onPressed: () =>
+                    s.completed ? player.seek(Duration.zero).then((_) => player.play()) : player.playOrPause(),
+                icon: Icon(s.playing ? Icons.pause : Icons.play_arrow),
               ),
-            ),
-            Text('${_t(s.position)} / ${_t(s.duration)}', style: Theme.of(context).textTheme.bodySmall),
-            const SizedBox(width: 8),
-          ]);
+              Expanded(
+                child: Slider(
+                  value: total == 0 ? 0 : (s.position.inMilliseconds / total).clamp(0.0, 1.0),
+                  onChanged: total == 0 ? null : (v) => player.seek(Duration(milliseconds: (v * total).round())),
+                ),
+              ),
+              Text('${_t(s.position)} / ${_t(s.duration)}', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(width: 8),
+            ],
+          );
         },
       ),
     );

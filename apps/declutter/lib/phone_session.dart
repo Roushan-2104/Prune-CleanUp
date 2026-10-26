@@ -119,7 +119,8 @@ class PhoneSession extends ChangeNotifier {
         devices = phones;
         notifyListeners();
       }
-      final phone = phones.where((p) => p.serial == _wanted && p.ready).firstOrNull ??
+      final phone =
+          phones.where((p) => p.serial == _wanted && p.ready).firstOrNull ??
           phones.where((p) => p.ready).firstOrNull ??
           phones.firstOrNull;
       if (phone == null) {
@@ -160,13 +161,20 @@ class PhoneSession extends ChangeNotifier {
     // phone computes it itself — nothing is copied.
     final facts = [
       for (final f in files)
-        FileFacts(path: f.path, folder: f.folder, bytes: f.bytes, mime: f.mime, modifiedSec: f.modifiedSec,
-            durationMs: f.durationMs),
+        FileFacts(
+          path: f.path,
+          folder: f.folder,
+          bytes: f.bytes,
+          mime: f.mime,
+          modifiedSec: f.modifiedSec,
+          durationMs: f.durationMs,
+        ),
     ];
     final candidates = sameSizeCandidates(facts);
     _step('Checking ${candidates.length} possible duplicates on the phone…');
-    final hashes = await _adb!.fingerprints(s, [for (final c in candidates) c.path],
-        onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
+    final hashes = await _adb!.fingerprints(s, [
+      for (final c in candidates) c.path,
+    ], onProgress: (n) => _step('Checking possible duplicates on the phone… $n of ${candidates.length}'));
     _fileLevel = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
     try {
       _apps = await _adb!.installedApps(s); // names the apps screenshots come from
@@ -253,3 +261,6 @@ String formatBytes(int b) {
   if (b >= 1 << 20) return '${(b / (1 << 20)).toStringAsFixed(0)} MB';
   return '${(b / 1024).toStringAsFixed(0)} KB';
 }
+
+/// 11729 → "11,729".
+String formatCount(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ',');
