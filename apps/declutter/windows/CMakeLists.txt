@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(declutter LANGUAGES CXX)
+project(prune LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "declutter")
+set(BINARY_NAME "Prune")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -78,13 +78,28 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
-# Declutter's text-and-face reading helper, next to Declutter.exe: the app
+# Prune's text-and-face reading helper, next to Prune.exe: the app
 # only runs the copy found there (built by packages/vision_helper/build.ps1).
-set(VISION_HELPER "${CMAKE_CURRENT_SOURCE_DIR}/../../../packages/vision_helper/bin/DeclutterVision.exe")
+set(VISION_HELPER "${CMAKE_CURRENT_SOURCE_DIR}/../../../packages/vision_helper/bin/PruneVision.exe")
 if(EXISTS "${VISION_HELPER}")
   install(FILES "${VISION_HELPER}" DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
 else()
-  message(WARNING "DeclutterVision.exe not built: run packages/vision_helper/build.ps1")
+  message(WARNING "PruneVision.exe not built: run packages/vision_helper/build.ps1")
+endif()
+
+# adb, Android's USB connection tool, in an "adb" folder next to Prune.exe
+# (where Prune looks first), so testers don't need the Android SDK. Taken
+# from this machine's SDK platform-tools, with Google's licence notice.
+if(DEFINED ENV{ANDROID_HOME})
+  set(PLATFORM_TOOLS "$ENV{ANDROID_HOME}/platform-tools")
+else()
+  set(PLATFORM_TOOLS "$ENV{LOCALAPPDATA}/Android/Sdk/platform-tools")
+endif()
+if(EXISTS "${PLATFORM_TOOLS}/adb.exe")
+  install(FILES "${PLATFORM_TOOLS}/adb.exe" "${PLATFORM_TOOLS}/AdbWinApi.dll" "${PLATFORM_TOOLS}/AdbWinUsbApi.dll"
+    "${PLATFORM_TOOLS}/NOTICE.txt" DESTINATION "${CMAKE_INSTALL_PREFIX}/adb" COMPONENT Runtime)
+else()
+  message(WARNING "adb not found in ${PLATFORM_TOOLS}: Prune will need adb on PATH")
 endif()
 
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

@@ -1,4 +1,4 @@
-/// Declutter's brain: decides what looks like junk, groups duplicates,
+/// Prune's brain: decides what looks like junk, groups duplicates,
 /// learns from the user's choices and measures its own accuracy.
 /// Pure Dart — it never touches the phone or the screen.
 library;

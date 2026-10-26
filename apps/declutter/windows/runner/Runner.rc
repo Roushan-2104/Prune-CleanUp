@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.declutter" "\0"
-            VALUE "FileDescription", "declutter" "\0"
+            VALUE "CompanyName", "Prune" "\0"
+            VALUE "FileDescription", "Prune" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "declutter" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.declutter. All rights reserved." "\0"
-            VALUE "OriginalFilename", "declutter.exe" "\0"
-            VALUE "ProductName", "declutter" "\0"
+            VALUE "InternalName", "Prune" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Prune. All rights reserved." "\0"
+            VALUE "OriginalFilename", "Prune.exe" "\0"
+            VALUE "ProductName", "Prune" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

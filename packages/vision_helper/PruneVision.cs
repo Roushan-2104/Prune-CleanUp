@@ -1,10 +1,10 @@
-// DeclutterVision — reads text (OCR) and counts faces in images using the
+// PruneVision — reads text (OCR) and counts faces in images using the
 // engines built into Windows 10/11. Fully offline; nothing leaves the laptop.
 //
 // Built with the C# compiler that ships with Windows (.NET Framework 4.x), so
 // it runs on any Windows 10/11 PC without installing anything. See build.ps1.
 //
-// Usage:  DeclutterVision.exe <jobs> <list file>
+// Usage:  PruneVision.exe <jobs> <list file>
 //   <jobs>       any of "ocr", "faces", "gray", comma-separated (the default)
 //   <list file>  UTF-8 text file, one image per line: "path", or
 //                "jobs<TAB>path" to choose jobs for that image
@@ -13,7 +13,7 @@
 //   then, per image, in order:
 //     {"path":"...","text":"line 1\nline 2","lines":2,"faces":1,"ok":true}
 //     {"path":"...","ok":false,"error":"..."}
-// `DeclutterVision.exe info` prints only the first line.
+// `PruneVision.exe info` prints only the first line.
 //
 // Requests come in a file rather than on stdin because .NET Framework
 // programs can't reliably read the stdin pipes some callers (Dart) create.
@@ -49,7 +49,7 @@ static class Program
         if (args.Length == 1 && args[0] == "info") return 0;
         if (args.Length != 2)
         {
-            Console.Error.WriteLine("usage: DeclutterVision.exe <ocr|faces|ocr,faces> <list file>");
+            Console.Error.WriteLine("usage: PruneVision.exe <ocr|faces|ocr,faces> <list file>");
             return 64;
         }
 

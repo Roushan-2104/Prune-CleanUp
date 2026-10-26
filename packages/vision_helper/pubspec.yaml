@@ -1,5 +1,5 @@
 name: vision_helper
-description: Runs DeclutterVision.exe (Windows built-in OCR + face detection) from Dart.
+description: Runs PruneVision.exe (Windows built-in OCR + face detection) from Dart.
 publish_to: none
 version: 0.1.0
 

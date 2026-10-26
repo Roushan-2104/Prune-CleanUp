@@ -16,11 +16,11 @@ People with huge phone galleries (10k–100k+ items): chronically online, techie
 
 ## Product Purpose
 
-Declutter reads the phone over USB, checks photos, screenshots, videos and files on the laptop, and shows what is safe to remove, with proof. The user reviews on the big screen, chooses, and Declutter moves the chosen items to the phone's Trash (optional backup first), with Undo. Success means the user frees a lot of space in one sitting and never loses something they wanted.
+Prune reads the phone over USB, checks photos, screenshots, videos and files on the laptop, and shows what is safe to remove, with proof. The user reviews on the big screen, chooses, and Prune moves the chosen items to the phone's Trash (optional backup first), with Undo. Success means the user frees a lot of space in one sitting and never loses something they wanted.
 
 ## Positioning
 
-Every suggestion carries its evidence: the photo shown next to the copy it matched, "How we know" facts for each item, and only items Declutter is sure about pre-ticked. Screenshots are grouped by what they actually are (chats by person and app, payments by app, other screens by app or website), not generic buckets.
+Every suggestion carries its evidence: the photo shown next to the copy it matched, "How we know" facts for each item, and only items Prune is sure about pre-ticked. Screenshots are grouped by what they actually are (chats by person and app, payments by app, other screens by app or website), not generic buckets.
 
 ## Operating Context
 
@@ -40,7 +40,7 @@ Every suggestion carries its evidence: the photo shown next to the copy it match
 
 ## Brand Commitments
 
-Name: Declutter (final). Personal data stays on the laptop.
+Name: Prune (final). Personal data stays on the laptop.
 
 ## Evidence on Hand
 

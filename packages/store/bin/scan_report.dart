@@ -1,6 +1,6 @@
 // Read-only report: lists everything on the connected phone, fingerprints
 // same-size files on the phone, runs the file rules and prints what
-// Declutter would suggest. Nothing on the phone is changed.
+// Prune would suggest. Nothing on the phone is changed.
 //
 // Usage: dart run bin/scan_report.dart <adb.exe>
 import 'dart:io';
@@ -35,7 +35,7 @@ Future<void> main(List<String> args) async {
   final verdicts = classifyFiles(facts, now: DateTime.now(), contentHash: hashes);
   final bytesOf = {for (final f in facts) f.path: f.bytes};
 
-  print('\nWhat Declutter would suggest (photos/screenshots need copying first, so not included yet):');
+  print('\nWhat Prune would suggest (photos/screenshots need copying first, so not included yet):');
   var sureTotal = 0, maybeTotal = 0;
   for (final c in JunkCategory.values) {
     final items = verdicts.entries.where((e) => e.value.verdict.category == c).toList();

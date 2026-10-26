@@ -1,5 +1,5 @@
 name: declutter_engine
-description: Declutter's brain — detection rules, duplicate matching, learning and accuracy scoring. Pure Dart, no UI.
+description: Prune's brain — detection rules, duplicate matching, learning and accuracy scoring. Pure Dart, no UI.
 publish_to: none
 version: 0.1.0
 

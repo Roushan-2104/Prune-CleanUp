@@ -1,4 +1,4 @@
-/// Read-only link between the Declutter laptop app and an Android phone.
+/// Read-only link between the Prune laptop app and an Android phone.
 library;
 
 export 'src/adb.dart';

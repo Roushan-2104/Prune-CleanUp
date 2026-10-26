@@ -1,4 +1,4 @@
-/// Declutter's local database on the laptop: which phones were connected,
+/// Prune's local database on the laptop: which phones were connected,
 /// what files they hold, what was measured about each file, and the history
 /// of clean-ups. One SQLite file; nothing leaves the laptop.
 library;
@@ -155,9 +155,9 @@ class Store {
     _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
   }
 
-  /// Removes everything Declutter knows about a phone from this laptop:
+  /// Removes everything Prune knows about a phone from this laptop:
   /// its file list, measurements and screenshot text, and clean-up history.
-  /// (Backup copies in "Declutter Backups" are the user's files and stay.)
+  /// (Backup copies in "Prune Backups" are the user's files and stay.)
   void forgetPhone(String serial) {
     _transaction(() {
       _db.execute('DELETE FROM fingerprints WHERE phone = ?', [serial]);

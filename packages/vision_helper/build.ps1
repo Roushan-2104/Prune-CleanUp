@@ -1,4 +1,4 @@
-# Builds DeclutterVision.exe with the C# compiler that ships with Windows.
+# Builds PruneVision.exe with the C# compiler that ships with Windows.
 # No SDK or download needed: the Windows OCR / face APIs are described by the
 # .winmd files every Windows 10/11 install has in System32\WinMetadata.
 $ErrorActionPreference = 'Stop'
@@ -18,6 +18,6 @@ $refs = @(
 ) | ForEach-Object { "/r:$_" }
 
 & "$fw\csc.exe" /nologo /optimize+ /platform:x64 /target:exe `
-  "/out:$out\DeclutterVision.exe" @refs (Join-Path $PSScriptRoot 'DeclutterVision.cs')
+  "/out:$out\PruneVision.exe" @refs (Join-Path $PSScriptRoot 'PruneVision.cs')
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-Write-Output "Built $out\DeclutterVision.exe"
+Write-Output "Built $out\PruneVision.exe"

@@ -7,8 +7,8 @@ import 'package:phone_link/phone_link.dart';
 ///
 /// - Copied on demand (only what's on screen or what you open), read-only
 ///   on the phone.
-/// - Kept in a private folder, %LOCALAPPDATA%\Declutter\previews, which is
-///   emptied when Declutter starts and when it closes.
+/// - Kept in a private folder, %LOCALAPPDATA%\Prune\previews, which is
+///   emptied when Prune starts and when it closes.
 class PreviewCache {
   PreviewCache(this.adb, this.serial);
 
@@ -20,7 +20,7 @@ class PreviewCache {
 
   static Directory get root {
     final base = Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
-    return Directory('$base\\Declutter\\previews');
+    return Directory('$base\\Prune\\previews');
   }
 
   /// Deletes every preview. Called on start and on close.

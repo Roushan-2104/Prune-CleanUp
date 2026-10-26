@@ -327,7 +327,7 @@ class MediaViewState extends State<MediaView> {
       // in its folder instead, so opening it is a deliberate choice.
       await Process.run(explorer, ['/select,', f.path]);
       if (mounted) {
-        setState(() => error = 'Declutter does not open programs or scripts. It is shown in its folder instead.');
+        setState(() => error = 'Prune does not open programs or scripts. It is shown in its folder instead.');
       }
       return;
     }
@@ -366,7 +366,7 @@ class MediaViewState extends State<MediaView> {
       body = Center(
         child: _local == null
             ? OutlinedButton.icon(
-                // Not violet: in Declutter violet only means "will be removed".
+                // Not violet: in Prune violet only means "will be removed".
                 style: OutlinedButton.styleFrom(
                   foregroundColor: c.onSurface,
                   side: BorderSide(color: c.onSurface),

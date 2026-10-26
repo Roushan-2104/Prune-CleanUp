@@ -136,7 +136,7 @@ class NotMedia implements Exception {
   NotMedia(this.name);
   final String name;
   @override
-  String toString() => '$name is not a real video or audio file, so Declutter won\'t play it.';
+  String toString() => '$name is not a real video or audio file, so Prune won\'t play it.';
 }
 
 /// Whether [head] (a file's first bytes) starts like a real audio or video
@@ -162,7 +162,7 @@ bool looksLikeMedia(List<int> head) {
 }
 
 /// A player for files from the phone, which are untrusted: it reads only
-/// local copies and Declutter's own 127.0.0.1 stream, and only real audio
+/// local copies and Prune's own 127.0.0.1 stream, and only real audio
 /// and video formats (see also [looksLikeMedia]).
 Player safePlayer() => Player(configuration: const PlayerConfiguration(protocolWhitelist: ['file', 'http', 'tcp']));
 

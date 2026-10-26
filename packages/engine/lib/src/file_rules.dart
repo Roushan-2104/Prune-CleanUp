@@ -31,7 +31,7 @@ class FileVerdict {
   final String? matchPath;
 }
 
-/// Places Declutter never suggests touching: things the user hid on
+/// Places Prune never suggests touching: things the user hid on
 /// purpose, other apps' private data, and WhatsApp's own backups.
 bool isProtected(String folder) {
   final f = folder.toLowerCase();

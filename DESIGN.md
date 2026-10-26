@@ -1,5 +1,5 @@
 ---
-name: Declutter
+name: Prune
 description: A careful librarian's weeding round for a full phone, on catalog-card paper; only stamped items leave.
 colors:
   stamp: "#5B3C8C"
@@ -163,7 +163,7 @@ components:
     rounded: "{rounded.panel}"
 ---
 
-# Design System: Declutter
+# Design System: Prune
 
 ## Overview
 
@@ -225,7 +225,7 @@ A paper-and-ink palette with two inks of meaning: red for the card's printed rul
 - **Display** (700, 30px, 1.15, -0.5px): the home headline only, "You can free X GB".
 - **Headline** (700, 24px, -0.3px): the open group's name at the top of the review grid.
 - **Title Large** (700, 20px): the title of a connection guide slip ("Plug in your Android phone").
-- **Title** (700, 18px): the Declutter wordmark in the top bar (-0.2px) and section headings on home ("For you to check").
+- **Title** (700, 18px): the Prune wordmark in the top bar (-0.2px) and section headings on home ("For you to check").
 - **Title Small** (600, 16px): the focused item's file name in the detail panel; the empty-detail prompt.
 - **Subhead** (600-700, 15px): sub-group headers ("Nikhil · WhatsApp", "Keeping IMG_2041.jpg"), slip headings ("The pick: 1,204 items"). "How we know" sits at 14px 700.
 - **Lede** (400, 15px, 1.5, faded ink): the explanatory paragraph under the display line, max 640px wide.

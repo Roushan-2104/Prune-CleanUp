@@ -1,5 +1,5 @@
 name: phone_link
-description: Read-only link between the Declutter laptop app and an Android phone over adb.
+description: Read-only link between the Prune laptop app and an Android phone over adb.
 publish_to: none
 version: 0.1.0
 

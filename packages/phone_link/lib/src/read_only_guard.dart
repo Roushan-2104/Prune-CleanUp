@@ -7,7 +7,7 @@ class NotReadOnlyError extends Error {
   String toString() => 'Blocked: "$command" is not a read-only phone command.';
 }
 
-// The only shell commands Declutter may run on a phone while it is
+// The only shell commands Prune may run on a phone while it is
 // inspecting it — every one of them only *reads* (see ensureReadOnly):
 //   getprop, df, du, stat, ls        facts about the phone and its files
 //   content query                     Android's media list

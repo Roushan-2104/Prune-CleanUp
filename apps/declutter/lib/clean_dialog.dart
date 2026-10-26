@@ -110,7 +110,7 @@ class _CleanDialogState extends State<_CleanDialog> {
                   value: backup,
                   onChanged: (v) => setState(() => backup = v!),
                   title: const Text('Back up to this laptop first (recommended)'),
-                  subtitle: const Text('Saved in your user folder under "Declutter Backups". Undo copies them back.'),
+                  subtitle: const Text('Saved in your user folder under "Prune Backups". Undo copies them back.'),
                 ),
                 if (!backup)
                   CheckboxListTile(

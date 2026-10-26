@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Declutter's look: a library's weeding round. Catalog-card paper on a
+/// Prune's look: a library's weeding round. Catalog-card paper on a
 /// pale desk, ink type, a red rule on every card and slip, and violet
 /// stamp-pad ink for whatever will be removed (ticks, the REMOVE stamp,
 /// the Clean button). Reasons and facts are typed.
@@ -28,7 +28,7 @@ abstract final class Typed {
   static TextStyle get factBold => fact.copyWith(fontWeight: FontWeight.w700);
 }
 
-ThemeData declutterTheme() {
+ThemeData pruneTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: Tone.stamp, brightness: Brightness.light).copyWith(
     primary: Tone.stamp,
     onPrimary: Colors.white,

@@ -9,7 +9,7 @@ import 'package:ffi/ffi.dart';
 /// it back (Windows' Data Protection API — the same mechanism browsers use
 /// for saved passwords). No key to manage: Windows ties it to the account.
 ///
-/// Used for what Declutter read off screenshots (chats, payments), which
+/// Used for what Prune read off screenshots (chats, payments), which
 /// would otherwise sit in the database as plain text.
 abstract final class Dpapi {
   static const _prefix = 'dpapi1:';

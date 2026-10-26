@@ -21,7 +21,7 @@ class CleanError implements Exception {
   String toString() => 'CleanError: $message';
 }
 
-/// The ONLY code in Declutter that changes a phone. Everything else goes
+/// The ONLY code in Prune that changes a phone. Everything else goes
 /// through the read-only guard.
 ///
 /// - Files in Android's media list go to the phone's own Trash (restorable

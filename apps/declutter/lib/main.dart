@@ -16,7 +16,7 @@ void main() {
   MediaKit.ensureInitialized(); // in-app video and audio playback
   PreviewCache.clearAll(); // previews and photo copies never outlive a session…
   PhotoScan.clearWork();
-  runApp(DeclutterApp(session: PhoneSession(Store.open(databasePath()))));
+  runApp(PruneApp(session: PhoneSession(Store.open(databasePath()))));
   // …and are deleted again when the window is closed.
   _exitListener = AppLifecycleListener(
     onExitRequested: () async {
@@ -31,33 +31,40 @@ void main() {
 // ignore: unused_element
 AppLifecycleListener? _exitListener;
 
-/// %LOCALAPPDATA%\Declutter\declutter.db — the laptop's memory of each phone.
+/// %LOCALAPPDATA%\Prune\prune.db — the laptop's memory of each phone.
 ///
 /// Local, not Roaming: on work and school PCs Roaming AppData is copied to a
 /// server at sign-out, and this file describes what's on a personal phone.
-/// A database left in the old Roaming place is moved here once.
+/// A database from before the app was called Prune (Local or Roaming
+/// "Declutter" folder) is moved here once.
 String databasePath() {
   final local = Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path;
-  final dir = Directory('$local\\Declutter')..createSync(recursive: true);
-  final path = '${dir.path}\\declutter.db';
-  final roaming = Platform.environment['APPDATA'];
-  if (roaming != null && !File(path).existsSync()) {
-    final old = '$roaming\\Declutter\\declutter.db';
-    try {
-      for (final suffix in ['', '-wal', '-shm']) {
-        if (File('$old$suffix').existsSync()) File('$old$suffix').renameSync('$path$suffix');
+  final dir = Directory('$local\\Prune')..createSync(recursive: true);
+  final path = '${dir.path}\\prune.db';
+  if (!File(path).existsSync()) {
+    for (final oldDir in [
+      '$local\\Declutter',
+      if (Platform.environment['APPDATA'] case final roaming?) '$roaming\\Declutter',
+    ]) {
+      final old = '$oldDir\\declutter.db';
+      if (!File(old).existsSync()) continue;
+      try {
+        for (final suffix in ['', '-wal', '-shm']) {
+          if (File('$old$suffix').existsSync()) File('$old$suffix').renameSync('$path$suffix');
+        }
+        // Whatever else is there is temporary (previews, photo copies).
+        Directory(oldDir).deleteSync(recursive: true);
+      } on FileSystemException {
+        // Different drive or in use: start fresh; the old one is left as it was.
       }
-      final oldDir = Directory('$roaming\\Declutter');
-      if (oldDir.existsSync() && oldDir.listSync().isEmpty) oldDir.deleteSync();
-    } on FileSystemException {
-      // Different drive or in use: start fresh here; the old one is left as it was.
+      break;
     }
   }
   return path;
 }
 
-class DeclutterApp extends StatelessWidget {
-  const DeclutterApp({super.key, required this.session});
+class PruneApp extends StatelessWidget {
+  const PruneApp({super.key, required this.session});
   final PhoneSession session;
 
   @override
@@ -65,9 +72,9 @@ class DeclutterApp extends StatelessWidget {
     // Light on purpose: photos and small screenshot text are judged most
     // faithfully on a paper ground. See theme.dart.
     return MaterialApp(
-      title: 'Declutter',
+      title: 'Prune',
       debugShowCheckedModeBanner: false,
-      theme: declutterTheme(),
+      theme: pruneTheme(),
       home: HomePage(session: session),
     );
   }

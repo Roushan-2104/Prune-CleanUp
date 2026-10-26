@@ -100,7 +100,7 @@ class PhotoScan extends ChangeNotifier {
     _files = files;
     final exe = findVisionHelper();
     if (exe == null) {
-      error = 'The text-reading helper (DeclutterVision.exe) is missing.';
+      error = 'The text-reading helper (PruneVision.exe) is missing.';
       notifyListeners();
       return;
     }
@@ -225,32 +225,32 @@ class PhotoScan extends ChangeNotifier {
     }
   }
 
-  /// %LOCALAPPDATA%\Declutter\work — copies being checked, one folder per run.
+  /// %LOCALAPPDATA%\Prune\work — copies being checked, one folder per run.
   static Directory get workRoot =>
-      Directory('${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}\\Declutter\\work');
+      Directory('${Platform.environment['LOCALAPPDATA'] ?? Directory.systemTemp.path}\\Prune\\work');
 
-  /// Removes copies left behind if Declutter was closed mid-check.
+  /// Removes copies left behind if Prune was closed mid-check.
   static void clearWork() {
     try {
       if (workRoot.existsSync()) workRoot.deleteSync(recursive: true);
     } catch (_) {}
   }
 
-  /// DeclutterVision.exe: next to Declutter (where the build installs it).
+  /// PruneVision.exe: next to Prune (where the build installs it).
   ///
   /// It is handed every photo, so it must never be a copy someone else put
-  /// somewhere: a release build accepts only the one beside Declutter.exe.
+  /// somewhere: a release build accepts only the one beside Prune.exe.
   /// Development builds also look in this project's own checkout (the
   /// folder with `.git`), never in any other parent folder.
   static String? findVisionHelper() {
     final exeDir = File(Platform.resolvedExecutable).parent;
-    final beside = File('${exeDir.path}\\DeclutterVision.exe');
+    final beside = File('${exeDir.path}\\PruneVision.exe');
     if (beside.existsSync()) return beside.path;
     if (kReleaseMode) return null;
     for (final start in [exeDir, Directory.current]) {
       for (Directory d = start.absolute; d.path != d.parent.path; d = d.parent) {
         if (!Directory('${d.path}\\.git').existsSync()) continue;
-        final dev = File('${d.path}\\packages\\vision_helper\\bin\\DeclutterVision.exe');
+        final dev = File('${d.path}\\packages\\vision_helper\\bin\\PruneVision.exe');
         return dev.existsSync() ? dev.path : null;
       }
     }

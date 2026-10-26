@@ -1,5 +1,5 @@
 name: declutter_store
-description: Declutter's local database on the laptop (SQLite).
+description: Prune's local database on the laptop (SQLite).
 publish_to: none
 version: 0.1.0
 

@@ -288,7 +288,7 @@ class PhoneSession extends ChangeNotifier {
     super.dispose();
   }
 
-  /// adb.exe: next to Declutter (when bundled), the Android SDK, or PATH.
+  /// adb.exe: next to Prune (when bundled), the Android SDK, or PATH.
   static String? findAdb() {
     final env = Platform.environment;
     final candidates = [
@@ -296,7 +296,7 @@ class PhoneSession extends ChangeNotifier {
       if (env['ANDROID_HOME'] != null) '${env['ANDROID_HOME']}\\platform-tools\\adb.exe',
       if (env['LOCALAPPDATA'] != null) '${env['LOCALAPPDATA']}\\Android\\Sdk\\platform-tools\\adb.exe',
       // Only absolute PATH entries: a relative one (".") would resolve to
-      // whatever folder Declutter was started from.
+      // whatever folder Prune was started from.
       for (final dir in (env['PATH'] ?? '').split(';'))
         if (RegExp(r'^[A-Za-z]:\\|^\\\\').hasMatch(dir.trim())) '${dir.trim()}\\adb.exe',
     ];

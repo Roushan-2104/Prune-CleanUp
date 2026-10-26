@@ -161,7 +161,7 @@ class _ReviewPageState extends State<ReviewPage> {
   /// items free, then the rest by size.
   List<JunkCategory> get categories => index.categories;
 
-  /// A group belongs under "Sure to remove" when Declutter is sure of some of it.
+  /// A group belongs under "Sure to remove" when Prune is sure of some of it.
   bool isSureGroup(JunkCategory c) => index.sure.contains(c);
 
   JunkCategory? get current {
@@ -226,7 +226,7 @@ class _ReviewPageState extends State<ReviewPage> {
     super.initState();
     widget.session.addListener(_onSession);
     // Development only (see HomePage): show the first card's detail too.
-    if (kDebugMode && (Platform.environment['DECLUTTER_OPEN'] ?? '').startsWith('review')) {
+    if (kDebugMode && (Platform.environment['PRUNE_OPEN'] ?? '').startsWith('review')) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final first = itemsIn(current).firstOrNull;
         if (first != null) focus(first.key);
@@ -371,7 +371,7 @@ class _ReviewPageState extends State<ReviewPage> {
   }
 }
 
-/// The groups, split into what Declutter is sure about and what's for the
+/// The groups, split into what Prune is sure about and what's for the
 /// user to check. Each carries a bar sized by the space it holds.
 class _Rail extends StatelessWidget {
   const _Rail({required this.state});
@@ -838,7 +838,7 @@ class _DetailHint extends StatelessWidget {
         Text('Pick a card to see it here', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
         SizedBox(height: 8),
         Text(
-          'Large, next to the copy it matched, with exactly why Declutter picked it.',
+          'Large, next to the copy it matched, with exactly why Prune picked it.',
           style: TextStyle(color: Tone.muted, height: 1.45),
         ),
         SizedBox(height: 24),
@@ -944,7 +944,7 @@ class _Detail extends StatelessWidget {
                               style: TextStyle(fontWeight: FontWeight.w600, color: on ? Tone.stamp : Tone.ink),
                             ),
                             Text(
-                              '${formatBytes(f.bytes)} · ${v.tier == Tier.sure ? 'Declutter is sure' : 'For you to check'}',
+                              '${formatBytes(f.bytes)} · ${v.tier == Tier.sure ? 'Prune is sure' : 'For you to check'}',
                               style: Typed.factMuted,
                             ),
                           ],

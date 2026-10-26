@@ -1,5 +1,5 @@
 /// Text reading (OCR) and face counting using the engines built into Windows,
-/// via DeclutterVision.exe. Everything runs locally.
+/// via PruneVision.exe. Everything runs locally.
 library;
 
 import 'dart:convert';
@@ -62,7 +62,7 @@ class VisionCapabilities {
   final String textLanguage;
 }
 
-/// Runs DeclutterVision.exe on batches of images, several batches at once.
+/// Runs PruneVision.exe on batches of images, several batches at once.
 ///
 /// Requests go to the helper as a list file rather than over stdin: .NET
 /// Framework programs can't reliably read the stdin pipes Dart creates.

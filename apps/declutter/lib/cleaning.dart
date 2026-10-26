@@ -27,12 +27,12 @@ class CleanResult {
   final int bytesFreed;
 }
 
-/// %USERPROFILE%\Declutter Backups
+/// %USERPROFILE%\Prune Backups
 String get backupRoot =>
-    '${Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path}\\Declutter Backups';
+    '${Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path}\\Prune Backups';
 
 /// Where each file of one clean-up is backed up:
-/// `Declutter Backups\<phone>\<date time>\<path on phone>`.
+/// `Prune Backups\<phone>\<date time>\<path on phone>`.
 ///
 /// Every part of the phone's path (and the phone's own name) is made safe,
 /// so no file name can place a backup outside this folder. Each clean-up

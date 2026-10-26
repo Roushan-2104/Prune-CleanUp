@@ -7,10 +7,10 @@ import 'package:image/image.dart' as img;
 import 'package:test/test.dart';
 import 'package:vision_helper/vision_helper.dart';
 
-/// Runs the real DeclutterVision.exe (build it first with build.ps1) on
+/// Runs the real PruneVision.exe (build it first with build.ps1) on
 /// images the test draws itself — no personal photos needed.
 void main() {
-  final exe = '${Directory.current.path}${Platform.pathSeparator}bin${Platform.pathSeparator}DeclutterVision.exe';
+  final exe = '${Directory.current.path}${Platform.pathSeparator}bin${Platform.pathSeparator}PruneVision.exe';
   final vision = Vision(exe, parallel: 3, batchSize: 4);
   late Directory dir;
 

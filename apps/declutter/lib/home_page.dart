@@ -13,7 +13,7 @@ import 'theme.dart';
 import 'top_bar.dart';
 
 /// First screen: find the phone, then lead with the safe pick — only what
-/// Declutter is sure about — and what's left for the user to check.
+/// Prune is sure about — and what's left for the user to check.
 class HomePage extends StatelessWidget {
   const HomePage({super.key, required this.session});
   final PhoneSession session;
@@ -38,8 +38,8 @@ class HomePage extends StatelessWidget {
                   LinkState.noAdb => const _Guide(
                     title: 'Phone connection tool not found',
                     steps: [
-                      'Declutter needs Android\'s "adb" tool to talk to your phone.',
-                      'Install Android SDK Platform-Tools, then restart Declutter.',
+                      'Prune needs Android\'s "adb" tool to talk to your phone.',
+                      'Install Android SDK Platform-Tools, then restart Prune.',
                     ],
                   ),
                   LinkState.waiting => const _Guide(
@@ -71,7 +71,7 @@ class HomePage extends StatelessWidget {
                   LinkState.forgotten => _Guide(
                   title: 'This phone is forgotten',
                   steps: const [
-                    'Everything Declutter saved about it on this laptop has been deleted.',
+                    'Everything Prune saved about it on this laptop has been deleted.',
                     'Unplug it, or read it again to start fresh.',
                   ],
                   action: TextButton(onPressed: session.rescan, child: const Text('Read it again')),
@@ -93,7 +93,7 @@ class HomePage extends StatelessWidget {
 }
 
 /// The suggestions split the way the first screen tells them: groups
-/// Declutter is sure about (and how much of each it picked), and groups
+/// Prune is sure about (and how much of each it picked), and groups
 /// left for the user.
 class _Pick {
   _Pick(PhoneSession session) {
@@ -139,14 +139,14 @@ class _Overview extends StatelessWidget {
     ),
   );
 
-  /// Development only: DECLUTTER_OPEN=review (or review:<group>, e.g.
+  /// Development only: `PRUNE_OPEN=review` (or `review:<group>`, e.g.
   /// review:shortClip) opens Review on start, so a screen capture can check
   /// it without driving the mouse.
   static bool _devOpened = false;
 
   @override
   Widget build(BuildContext context) {
-    final dev = Platform.environment['DECLUTTER_OPEN'] ?? '';
+    final dev = Platform.environment['PRUNE_OPEN'] ?? '';
     if (kDebugMode && !_devOpened && dev.startsWith('review')) {
       _devOpened = true;
       final group = JunkCategory.values.where((c) => dev == 'review:${c.name}').firstOrNull;
@@ -164,7 +164,7 @@ class _Overview extends StatelessWidget {
             children: [
               Text(
                 pick.sureBytes == 0
-                    ? 'Nothing Declutter is sure about yet'
+                    ? 'Nothing Prune is sure about yet'
                     : 'You can free ${formatBytes(pick.sureBytes)}',
                 style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.15),
               ),
@@ -172,7 +172,7 @@ class _Overview extends StatelessWidget {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: const Text(
-                  'Declutter picked only what it is sure about, each with clear proof. Look through it group by '
+                  'Prune picked only what it is sure about, each with clear proof. Look through it group by '
                   'group, untick anything you want to keep, then clean. Nothing changes on the phone until you do.',
                   style: TextStyle(fontSize: 15, color: Tone.muted, height: 1.5),
                 ),
@@ -273,9 +273,9 @@ Future<void> _confirmForget(BuildContext context) async {
       content: const SizedBox(
         width: 460,
         child: Text(
-          'Declutter will delete everything it saved about this phone on this laptop: its file list, what it '
+          'Prune will delete everything it saved about this phone on this laptop: its file list, what it '
           'measured and read from screenshots, and the history of past clean-ups (so they can no longer be '
-          'undone from here).\n\nNothing on the phone changes, and backup copies in "Declutter Backups" stay. '
+          'undone from here).\n\nNothing on the phone changes, and backup copies in "Prune Backups" stay. '
           'Connecting the phone again starts fresh.',
           style: TextStyle(height: 1.45),
         ),
@@ -393,7 +393,7 @@ class _SinceLastTime extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = session.sinceLastTime;
     final text = d == null
-        ? 'First time connecting this phone: all ${session.needAnalysis} files are new to Declutter.'
+        ? 'First time connecting this phone: all ${session.needAnalysis} files are new to Prune.'
         : (d.added + d.changed + d.removed == 0)
         ? 'Nothing changed since last time, so nothing needs checking again.'
         : 'Since last time: ${d.added} new, ${d.changed} edited, ${d.removed} gone. '

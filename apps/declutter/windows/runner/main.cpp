@@ -7,12 +7,12 @@
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
-  // One Declutter at a time: a second one would wipe the first one's photo
+  // One Prune at a time: a second one would wipe the first one's photo
   // copies and previews on start while it is still using them. Starting it
   // again just brings the open window forward.
-  HANDLE single = ::CreateMutexW(nullptr, TRUE, L"Local\\Declutter.SingleInstance");
+  HANDLE single = ::CreateMutexW(nullptr, TRUE, L"Local\\Prune.SingleInstance");
   if (single != nullptr && ::GetLastError() == ERROR_ALREADY_EXISTS) {
-    if (HWND open = ::FindWindowW(nullptr, L"declutter")) {
+    if (HWND open = ::FindWindowW(nullptr, L"Prune")) {
       ::ShowWindow(open, SW_RESTORE);
       ::SetForegroundWindow(open);
     }
@@ -40,7 +40,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1280, 720);
-  if (!window.Create(L"declutter", origin, size)) {
+  if (!window.Create(L"Prune", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

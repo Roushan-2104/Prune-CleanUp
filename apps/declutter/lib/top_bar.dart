@@ -27,7 +27,7 @@ class TopBar extends StatelessWidget {
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 8)],
-          const Text('Declutter', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+          const Text('Prune', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
           const SizedBox(width: 12),
           const _ReadOnly(),
           if (info != null) ...[
@@ -81,7 +81,7 @@ class _ReadOnly extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Tooltip(
-    message: 'Declutter only reads your phone. Nothing changes until you approve a clean-up.',
+    message: 'Prune only reads your phone. Nothing changes until you approve a clean-up.',
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
