@@ -18,6 +18,7 @@ $refs = @(
   "$fw\System.IO.Compression.dll",
   "$fw\System.IO.Compression.FileSystem.dll",
   "$fw\System.Runtime.dll",
+  "$fw\System.Runtime.WindowsRuntime.dll",
   "$fw\System.Runtime.InteropServices.WindowsRuntime.dll"
 ) | ForEach-Object { "/r:$_" }
 

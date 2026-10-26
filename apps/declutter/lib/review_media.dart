@@ -12,6 +12,54 @@ import 'media_view.dart' show markFromInternet;
 import 'photo_scan.dart';
 import 'previews.dart';
 
+/// Types that get a picture of their contents: PDFs, app installers and
+/// office or text documents. Nothing else is handed to Windows to draw:
+/// files come from the phone and may be crafted, and for shortcut-like
+/// types (.lnk, .url, .library-ms…) merely drawing the icon can make
+/// Windows contact a server named inside the file. Those show Prune's own
+/// type icon instead.
+bool hasDocumentPreview(String name) {
+  final dot = name.lastIndexOf('.');
+  return dot >= 0 && _previewTypes.contains(name.substring(dot + 1).toLowerCase());
+}
+
+const _previewTypes = {
+  'pdf', 'apk', //
+  'doc', 'docx', 'docm', 'dot', 'dotx', 'rtf', 'odt', 'txt', 'md', 'csv',
+  'xls', 'xlsx', 'xlsm', 'ods', 'ppt', 'pptx', 'pptm', 'pps', 'ppsx', 'odp',
+};
+
+/// Unpacks raw deflate data, giving up (null) once it passes [limit] bytes:
+/// a crafted zip can claim a tiny size yet unpack to gigabytes.
+Uint8List? inflateAtMost(List<int> packed, int limit) {
+  final out = _CappedSink(limit);
+  try {
+    final input = ZLibDecoder(raw: true).startChunkedConversion(out);
+    for (var i = 0; i < packed.length; i += 16 << 10) {
+      input.add(packed.sublist(i, min(i + (16 << 10), packed.length)));
+    }
+    input.close();
+  } catch (_) {
+    return null; // too big, or not valid deflate data
+  }
+  return out.bytes.takeBytes();
+}
+
+class _CappedSink implements Sink<List<int>> {
+  _CappedSink(this.limit);
+  final int limit;
+  final bytes = BytesBuilder(copy: false);
+
+  @override
+  void add(List<int> data) {
+    bytes.add(data);
+    if (bytes.length > limit) throw const FormatException('unpacks past its limit');
+  }
+
+  @override
+  void close() {}
+}
+
 /// Everything the review screen needs to SHOW phone files, without copying
 /// big ones: small files are fetched whole (instant), big videos and audio
 /// are streamed from the phone a slice at a time, and video frames
@@ -88,7 +136,7 @@ class ReviewMedia {
             // Not a readable zip: fall back to the type icon below.
           }
         }
-        if (f.bytes > previewLimit) return null;
+        if (f.bytes > previewLimit || !hasDocumentPreview(f.name)) return null;
         final local = await previews.get(f);
         if (local == null) return null;
         markFromInternet(local.path);
@@ -142,15 +190,17 @@ class ReviewMedia {
         bestRank = rank;
       }
     }
-    if (best == null) return null;
+    if (best == null || best.at + 30 > f.bytes) return null;
 
     // The icon itself: a 30-byte header, its name and extra field, then the data.
+    // Every offset comes from the file, so each is checked against its real size.
     final header = await read(best.at, 30);
     if (header.getUint32(0, Endian.little) != 0x04034b50) return null;
     final dataAt = best.at + 30 + header.getUint16(26, Endian.little) + header.getUint16(28, Endian.little);
+    if (dataAt + best.packed > f.bytes) return null;
     final packed = Uint8List.sublistView(await read(dataAt, best.packed));
-    final data = best.method == 0 ? packed : Uint8List.fromList(ZLibDecoder(raw: true).convert(packed));
-    return data.length == best.size ? data : null;
+    final data = best.method == 0 ? packed : inflateAtMost(packed, best.size);
+    return data != null && data.length == best.size ? data : null;
   }
 
   Future<void> _runBatch() async {

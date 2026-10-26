@@ -390,7 +390,15 @@ class MediaViewState extends State<MediaView> {
             ? const Center(child: CircularProgressIndicator())
             : snap.data == null
             ? const Center(child: Text('Preview not available'))
-            : InteractiveViewer(maxScale: 6, child: Image.file(snap.data!, fit: BoxFit.contain)),
+            : InteractiveViewer(
+                maxScale: 6,
+                // Held at most 4096 px a side, whatever size the file claims.
+                child: Image(
+                  image: ResizeImage(FileImage(snap.data!),
+                      width: 4096, height: 4096, policy: ResizeImagePolicy.fit, allowUpscaling: false),
+                  fit: BoxFit.contain,
+                ),
+              ),
       );
     } else if (_playable) {
       body = Center(

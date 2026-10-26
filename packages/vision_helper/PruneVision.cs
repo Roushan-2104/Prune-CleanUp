@@ -160,9 +160,22 @@ static class Program
         byte[] png = null;
         if (ext == ".pdf") png = PdfFirstPage(path);
         else if (ext == ".apk") png = ApkIcon(path);
-        if (png == null) png = OnSta(() => ShellThumbnail(path));
-        return ",\"thumb\":\"" + Convert.ToBase64String(png) + "\"";
+        else if (Array.IndexOf(ShellTypes, ext) >= 0) png = OnSta(() => ShellThumbnail(path));
+        return png == null ? "" : ",\"thumb\":\"" + Convert.ToBase64String(png) + "\"";
     }
+
+    /// The only types Windows' shell is asked to draw. Files come from a
+    /// phone, so they may be crafted: for shortcut-like types (.lnk, .url,
+    /// .library-ms, .searchConnector-ms…) just drawing the icon can make
+    /// Windows contact a server named inside the file.
+    static readonly string[] ShellTypes = {
+        ".doc", ".docx", ".docm", ".dot", ".dotx", ".rtf", ".odt", ".txt", ".md", ".csv",
+        ".xls", ".xlsx", ".xlsm", ".ods", ".ppt", ".pptx", ".pptm", ".pps", ".ppsx", ".odp",
+    };
+
+    /// Pictures bigger than this on either side are not decoded: a crafted
+    /// file could otherwise ask for gigabytes of memory.
+    const int MaxSide = 4096;
 
     /// The first page, rendered by Windows' own PDF engine; null if the PDF
     /// is locked or damaged.
@@ -178,6 +191,11 @@ static class Program
             {
                 Windows.Data.Pdf.PdfPageRenderOptions o = new Windows.Data.Pdf.PdfPageRenderOptions();
                 o.DestinationWidth = 600; // PNG unless told otherwise
+                // A very tall page: only its top (at most 4 widths high), so
+                // the picture stays small whatever size the page claims.
+                Windows.Foundation.Size size = page.Size;
+                if (size.Width <= 0 || size.Height <= 0) return null;
+                if (size.Height > 4 * size.Width) o.SourceRect = new Windows.Foundation.Rect(0, 0, size.Width, 4 * size.Width);
                 AwaitAction(page.RenderToStreamAsync(s, o));
                 return ReadAll(s);
             }
@@ -215,10 +233,17 @@ static class Program
                     }
                 }
                 if (best == null) return null;
+                // Never trust the size the zip claims: stop unpacking past 2 MB.
                 using (Stream s = best.Open())
                 using (MemoryStream m = new MemoryStream())
                 {
-                    s.CopyTo(m);
+                    byte[] buffer = new byte[81920];
+                    int n;
+                    while ((n = s.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        m.Write(buffer, 0, n);
+                        if (m.Length > (2 << 20)) return null;
+                    }
                     return ToPng(m.ToArray());
                 }
             }
@@ -243,6 +268,7 @@ static class Program
                 w.DetachStream();
             }
             BitmapDecoder dec = Await(BitmapDecoder.CreateAsync(input));
+            if (dec.PixelWidth > MaxSide || dec.PixelHeight > MaxSide) return null;
             using (SoftwareBitmap bmp = Await(dec.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied)))
             using (InMemoryRandomAccessStream output = new InMemoryRandomAccessStream())
             {

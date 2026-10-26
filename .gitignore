@@ -1,60 +1,107 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
-.DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+# Prune: what never goes to GitHub.
+# Two kinds: things that are rebuilt (build output, tool caches) and things
+# that are private (anything read from a phone, databases, logs, keys).
+# apps/declutter keeps Flutter's own .gitignore files beside these rules.
 
-# IntelliJ related
+# --- Private: never commit, whatever the folder -------------------------
+
+# Databases, journals and logs (prune.db holds file names and OCR text).
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.log
+*.log.*
+
+# Exports from the engine's analysis tools: they hold a phone's OCR text.
+packages/engine/tool/*.json
+*texts*.json
+*export*.json
+
+# Copies of phone files: backups, previews, pulled folders, installers.
+Prune Backups/
+**/previews/
+**/work/
+pulled/
+phone-*/
+*.apk
+*.apks
+*.xapk
+
+# Screen recordings and captures (demo videos may show real chats).
+*.mp4
+*.mov
+*.mkv
+*.webm
+captures/
+screenshots/
+recordings/
+
+# Keys, passwords and code-signing certificates.
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.p12
+*.cer
+*.crt
+*.jks
+*.keystore
+*.snk
+key.properties
+local.properties
+secrets.*
+*.secret
+
+# Personal notes and scratch space.
+/scratch/
+/tmp/
+*.local.*
+
+# --- Rebuilt: build output and tool caches -----------------------------
+
+# Flutter / Dart
+.dart_tool/
+.packages
+.pub/
+.pub-cache/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+coverage/
+**/doc/api/
+**/windows/flutter/ephemeral/
+.widget_preview/
+*.symbols
+*.map.json
+
+# The C# helper (rebuild with packages/vision_helper/build.ps1)
+packages/vision_helper/bin/
+packages/vision_helper/obj/
+*.pdb
+
+# The beta ZIP and installer (rebuild with tool/package.ps1)
+/dist/
+/Output/
+
+# --- Editors and operating systems -------------------------------------
+
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
-
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
-
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-
-# Widget Preview related
-.widget_preview/
+.vscode/
+.vs/
+*.swp
+*~
+.history/
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
 # Local Claude Code / plugin data
 .claude/
-
-# Built helper (rebuild with packages/vision_helper/build.ps1)
-packages/vision_helper/bin/
-
-# Exports from the engine's analysis tools (they hold a phone's OCR text)
-packages/engine/tool/*.json
-
-# Portable beta (tool/package.ps1)
-/dist/

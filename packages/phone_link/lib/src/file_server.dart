@@ -37,7 +37,7 @@ class PhoneFileServer {
   Future<void> _handle(HttpRequest req) async {
     final res = req.response;
     final f = _byToken[req.uri.pathSegments.firstOrNull];
-    if (f == null) {
+    if (f == null || (req.method != 'GET' && req.method != 'HEAD')) {
       res.statusCode = HttpStatus.notFound;
       await res.close();
       return;

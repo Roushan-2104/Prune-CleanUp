@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io' show ZLibEncoder;
+import 'dart:typed_data';
 
 import 'package:declutter/review_media.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,5 +22,27 @@ void main() {
     expect(looksLikeMedia(ascii.encode('ffconcat version 1.0\nfile C:/x')), isFalse, reason: 'concat list');
     expect(looksLikeMedia(ascii.encode('[playlist]\nFile1=http://x')), isFalse, reason: 'PLS playlist');
     expect(looksLikeMedia(const []), isFalse);
+  });
+
+  test('only document types get a Windows-drawn preview', () {
+    for (final ok in ['Report.pdf', 'app.APK', 'notes.docx', 'sheet.xlsx', 'deck.pptx', 'readme.txt']) {
+      expect(hasDocumentPreview(ok), isTrue, reason: ok);
+    }
+    // Drawing these can make Windows contact a server named inside the file.
+    for (final risky in ['invoice.pdf.lnk', 'link.url', 'x.library-ms', 'x.searchConnector-ms', 'x.scf', 'setup.exe',
+        'page.html', 'no-extension']) {
+      expect(hasDocumentPreview(risky), isFalse, reason: risky);
+    }
+  });
+
+  test('unpacking stops at the size the zip claims', () {
+    final icon = List.generate(5000, (i) => i % 251);
+    final packed = ZLibEncoder(raw: true).convert(icon);
+    expect(inflateAtMost(packed, icon.length), icon, reason: 'a real icon unpacks');
+
+    // 50 MB of zeros packs into about 50 KB: a "zip bomb" claiming to be a small icon.
+    final bomb = ZLibEncoder(raw: true).convert(Uint8List(50 << 20));
+    expect(inflateAtMost(bomb, 2 << 20), isNull);
+    expect(inflateAtMost([1, 2, 3, 4], 100) ?? const [], isEmpty, reason: 'not deflate data: nothing comes out');
   });
 }

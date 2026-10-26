@@ -295,10 +295,11 @@ class PhoneSession extends ChangeNotifier {
       '${File(Platform.resolvedExecutable).parent.path}\\adb\\adb.exe',
       if (env['ANDROID_HOME'] != null) '${env['ANDROID_HOME']}\\platform-tools\\adb.exe',
       if (env['LOCALAPPDATA'] != null) '${env['LOCALAPPDATA']}\\Android\\Sdk\\platform-tools\\adb.exe',
-      // Only absolute PATH entries: a relative one (".") would resolve to
-      // whatever folder Prune was started from.
+      // Only absolute PATH entries on a local drive: a relative one (".")
+      // would resolve to whatever folder Prune was started from, and a
+      // network share (\\server\…) could hand over someone else's adb.
       for (final dir in (env['PATH'] ?? '').split(';'))
-        if (RegExp(r'^[A-Za-z]:\\|^\\\\').hasMatch(dir.trim())) '${dir.trim()}\\adb.exe',
+        if (RegExp(r'^[A-Za-z]:\\').hasMatch(dir.trim())) '${dir.trim()}\\adb.exe',
     ];
     return candidates.where((p) => File(p).existsSync()).firstOrNull;
   }
