@@ -83,6 +83,10 @@ packages/vision_helper/bin/
 packages/vision_helper/obj/
 *.pdb
 
+# Node / video tooling (reinstall with npm install; renders are rebuilt)
+node_modules/
+video/out/
+
 # The beta ZIP and installer (rebuild with tool/package.ps1)
 /dist/
 /Output/

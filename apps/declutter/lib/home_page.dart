@@ -9,6 +9,7 @@ import 'accuracy_page.dart';
 import 'clean_dialog.dart';
 import 'phone_session.dart';
 import 'photo_scan.dart';
+import 'power.dart';
 import 'review_page.dart';
 import 'theme.dart';
 import 'top_bar.dart';
@@ -369,6 +370,21 @@ class _PhotoProgress extends StatelessWidget {
             'this laptop after each batch.',
             style: const TextStyle(fontSize: 12, color: Tone.muted),
           ),
+          if (onBattery()) ...[
+            const SizedBox(height: 6),
+            const Row(
+              children: [
+                Icon(Icons.power_outlined, size: 16, color: Tone.ink),
+                SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'This laptop is on battery, so Windows slows the check down. Plug it in for a faster check.',
+                    style: TextStyle(fontSize: 12, color: Tone.ink),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       );
     }

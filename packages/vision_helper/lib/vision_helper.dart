@@ -49,14 +49,24 @@ class SmallGray {
 
 /// What to do with one image.
 class VisionJob {
-  const VisionJob(this.path, {this.text = false, this.faces = false, this.gray = false, this.thumb = false});
+  const VisionJob(this.path,
+      {this.text = false, this.textMaxSide, this.faces = false, this.gray = false, this.thumb = false});
   final String path;
   final bool text;
+
+  /// Read text with the image shrunk so its longest side is at most this
+  /// (null: full size). Text reading costs grow with the pixel count.
+  final int? textMaxSide;
   final bool faces;
   final bool gray;
   final bool thumb;
 
-  String get jobs => [if (text) 'ocr', if (faces) 'faces', if (gray) 'gray', if (thumb) 'thumb'].join(',');
+  String get jobs => [
+        if (text) textMaxSide == null ? 'ocr' : 'ocr@$textMaxSide',
+        if (faces) 'faces',
+        if (gray) 'gray',
+        if (thumb) 'thumb',
+      ].join(',');
 }
 
 /// What this PC's Windows can do.

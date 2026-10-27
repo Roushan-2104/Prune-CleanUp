@@ -24,6 +24,12 @@ class PhotoScan extends ChangeNotifier {
 
   static const batchSize = 200;
 
+  /// Big photos have their text read from a copy shrunk to this size: a
+  /// third faster, and on 377 real images (150 bigger than this) not one
+  /// verdict changed; at 2000 px two did. Anything shaped like a phone
+  /// screen is always read at full size (the helper checks).
+  static const textMaxSide = 2560;
+
   bool running = false;
   int total = 0;
   int done = 0;
@@ -122,8 +128,10 @@ class PhotoScan extends ChangeNotifier {
 
     // A Wi-Fi serial is "ip:port", and ':' in a folder name is an alternate data stream.
     final work = Directory(inside(workRoot.path, ['$serial-${DateTime.now().millisecondsSinceEpoch}']));
-    // Text reading is CPU-bound: 8 helpers measured fastest on a 12-thread laptop.
-    final vision = Vision(exe, parallel: (Platform.numberOfProcessors - 4).clamp(2, 8), batchSize: 15);
+    // Text reading is CPU-bound: 8 helpers measured fastest on a 12-thread
+    // laptop. Small lists (a helper starts in ~70 ms) keep every helper busy
+    // to the end of a batch, instead of a few finishing long lists alone.
+    final vision = Vision(exe, parallel: (Platform.numberOfProcessors - 4).clamp(2, 8), batchSize: 5);
     final batches = [for (var i = 0; i < todo.length; i += batchSize) todo.sublist(i, (i + batchSize).clamp(0, todo.length))];
     // The next batch copies over USB while this one is being read.
     Future<List<PhoneFile>>? next;
@@ -157,7 +165,9 @@ class PhotoScan extends ChangeNotifier {
 
   Future<List<PhoneFile>> _copy(List<PhoneFile> batch, Directory work) async {
     final sw = Stopwatch()..start();
-    final copied = (await adb.copyManyToLaptop(serial, batch, (f) => _local(work, f))).copied;
+    // Two pulls side by side: 28 MB/s instead of 16 on a real phone (three
+    // were no faster).
+    final copied = (await adb.copyManyToLaptop(serial, batch, (f) => _local(work, f), parallel: 2)).copied;
     _copyMs = sw.elapsedMilliseconds;
     return copied;
   }
@@ -168,7 +178,8 @@ class PhotoScan extends ChangeNotifier {
     notifyListeners();
     final sw = Stopwatch()..start();
     final results = await vision.analyseEach([
-      for (final f in copied) VisionJob(local(f), gray: true, text: mightBeScreenshot(images[f.path]!)),
+      for (final f in copied)
+        VisionJob(local(f), gray: true, text: mightBeScreenshot(images[f.path]!), textMaxSide: textMaxSide),
     ]);
     _readMs = sw.elapsedMilliseconds;
     _faceMs = 0;

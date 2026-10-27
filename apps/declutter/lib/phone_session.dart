@@ -223,11 +223,23 @@ class PhoneSession extends ChangeNotifier {
     final progress = p.running ? p.done : -2;
     if (progress != _photosDone) {
       _photosDone = progress;
-      unawaited(_rejudge());
+      // Sorting 16,000 photos takes seconds of processor time, which the
+      // check itself needs: while it runs, results refresh every 20 s at
+      // most rather than after every batch. At the end, at once.
+      final wait = p.running ? _judgeEvery - _sinceJudge.elapsed : Duration.zero;
+      _judgeLater?.cancel();
+      if (wait <= Duration.zero) {
+        unawaited(_rejudge());
+      } else {
+        _judgeLater = Timer(wait, () => unawaited(_rejudge()));
+      }
     }
     notifyListeners();
   }
 
+  static const _judgeEvery = Duration(seconds: 20);
+  final _sinceJudge = Stopwatch();
+  Timer? _judgeLater;
   bool _judging = false, _judgeAgain = false;
 
   /// Re-judges every measured photo on a background thread, so the window
@@ -241,6 +253,9 @@ class PhoneSession extends ChangeNotifier {
     try {
       do {
         _judgeAgain = false;
+        _sinceJudge
+          ..reset()
+          ..start();
         final p = photos, s = serial, files = summary?.files;
         if (p == null || s == null || files == null) return;
         final images = await p.judgeInBackground(files, installedApps: _apps);
@@ -255,6 +270,7 @@ class PhoneSession extends ChangeNotifier {
   }
 
   void _stopPhotos() {
+    _judgeLater?.cancel();
     photos
       ?..removeListener(_onPhotos)
       ..stop();

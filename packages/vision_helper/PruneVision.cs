@@ -39,13 +39,14 @@ static class Program
     {
         Console.OutputEncoding = new UTF8Encoding(false);
 
+        RunAtFullSpeed();
         OcrEngine ocr = OcrEngine.TryCreateFromUserProfileLanguages();
         if (ocr == null) ocr = OcrEngine.TryCreateFromLanguage(new Language("en-US"));
-        FaceDetector faces = FaceDetector.IsSupported ? Await(FaceDetector.CreateAsync()) : null;
+        FaceDetector faces = null; // created on first use: few photos need it
 
         Console.Out.WriteLine("{\"ready\":true,\"ocr\":" + Bool(ocr != null) +
             ",\"ocrLanguage\":" + Json(ocr != null ? ocr.RecognizerLanguage.LanguageTag : "") +
-            ",\"faces\":" + Bool(faces != null) + "}");
+            ",\"faces\":" + Bool(FaceDetector.IsSupported) + "}");
         Console.Out.Flush();
         if (args.Length == 1 && args[0] == "info") return 0;
         if (args.Length != 2)
@@ -62,15 +63,25 @@ static class Program
             int tab = line.IndexOf('\t');
             string[] jobs = (tab >= 0 ? line.Substring(0, tab) : args[0]).Split(',');
             string path = tab >= 0 ? line.Substring(tab + 1) : line;
-            bool doOcr = Array.IndexOf(jobs, "ocr") >= 0, doFaces = Array.IndexOf(jobs, "faces") >= 0,
+            // "ocr@1600" reads text with the image's longest side shrunk to 1600 px.
+            uint ocrSize = OcrEngine.MaxImageDimension;
+            bool doOcr = false;
+            foreach (string j in jobs)
+            {
+                if (j == "ocr") doOcr = true;
+                else if (j.StartsWith("ocr@") && uint.TryParse(j.Substring(4), out ocrSize)) doOcr = true;
+            }
+            ocrSize = Math.Max(320, Math.Min(ocrSize, OcrEngine.MaxImageDimension));
+            bool doFaces = Array.IndexOf(jobs, "faces") >= 0,
                 doGray = Array.IndexOf(jobs, "gray") >= 0, doThumb = Array.IndexOf(jobs, "thumb") >= 0;
+            if (doFaces && faces == null && FaceDetector.IsSupported) faces = Await(FaceDetector.CreateAsync());
             Trace("image: " + path);
             string reply;
             try
             {
                 StringBuilder sb = new StringBuilder("{\"path\":").Append(Json(path));
                 if (doGray) sb.Append(SmallGray(path));
-                if (doOcr) sb.Append(ReadText(ocr, path));
+                if (doOcr) sb.Append(ReadText(ocr, path, ocrSize));
                 if (doFaces) sb.Append(CountFaces(faces, path));
                 if (doThumb) sb.Append(Thumbnail(path));
                 reply = sb.Append(",\"ok\":true}").ToString();
@@ -115,10 +126,10 @@ static class Program
     }
 
     /// Returns the JSON fields `,"text":…,"lines":n`.
-    static string ReadText(OcrEngine ocr, string path)
+    static string ReadText(OcrEngine ocr, string path, uint maxSide)
     {
         if (ocr == null) throw new InvalidOperationException("Windows text recognition is not available");
-        using (SoftwareBitmap bmp = Load(path, OcrEngine.MaxImageDimension, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied))
+        using (SoftwareBitmap bmp = Load(path, maxSide, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied, screensFullSize: true))
         {
             OcrResult result = Await(ocr.RecognizeAsync(bmp));
             // Keep line breaks: the rules use them (e.g. "Paid to" on one line, name on the next).
@@ -330,6 +341,34 @@ static class Program
         }
     }
 
+    /// Windows 11 may move window-less helpers like this one onto its slow,
+    /// power-saving cores ("EcoQoS"), most of all on battery, which made the
+    /// photo check several times slower. The user is waiting on this work, so
+    /// ask for normal speed. (Older Windows ignores the request.)
+    static void RunAtFullSpeed()
+    {
+        // For measuring only: PRUNE_VISION_POWER=default leaves it to Windows,
+        // =eco forces the slow cores.
+        string mode = Environment.GetEnvironmentVariable("PRUNE_VISION_POWER");
+        if (mode == "default") return;
+        ProcessPowerThrottlingState s = new ProcessPowerThrottlingState
+        {
+            Version = 1, // PROCESS_POWER_THROTTLING_CURRENT_VERSION
+            ControlMask = 1 | 4, // EXECUTION_SPEED | IGNORE_TIMER_RESOLUTION
+            StateMask = mode == "eco" ? 1u | 4u : 0u, // 0: never throttled
+        };
+        SetProcessInformation(GetCurrentProcess(), 4 /* ProcessPowerThrottling */, ref s, Marshal.SizeOf(s));
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct ProcessPowerThrottlingState { public uint Version, ControlMask, StateMask; }
+
+    [DllImport("kernel32.dll")]
+    static extern bool SetProcessInformation(IntPtr process, int infoClass, ref ProcessPowerThrottlingState info, int size);
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
+
     /// Shell thumbnail providers expect a single-threaded apartment.
     static T OnSta<T>(Func<T> work)
     {
@@ -387,7 +426,11 @@ static class Program
 
     /// Decodes an image (JPEG, PNG, HEIC if the codec is installed, …),
     /// turned upright per its EXIF orientation and shrunk to fit maxDim.
-    static SoftwareBitmap Load(string path, uint maxDim, BitmapPixelFormat format, BitmapAlphaMode alpha)
+    /// With screensFullSize, an image shaped like a phone screen (2:1 or
+    /// taller, e.g. a long scrolling screenshot) is never shrunk: its text
+    /// would become too small to read.
+    static SoftwareBitmap Load(string path, uint maxDim, BitmapPixelFormat format, BitmapAlphaMode alpha,
+        bool screensFullSize = false)
     {
         StorageFile file = Await(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
         using (IRandomAccessStream stream = Await(file.OpenAsync(FileAccessMode.Read)))
@@ -395,6 +438,8 @@ static class Program
             BitmapDecoder dec = Await(BitmapDecoder.CreateAsync(stream));
             BitmapTransform t = new BitmapTransform();
             uint longest = Math.Max(dec.PixelWidth, dec.PixelHeight);
+            uint shortest = Math.Max(1u, Math.Min(dec.PixelWidth, dec.PixelHeight));
+            if (screensFullSize && longest >= 1.9 * shortest) maxDim = Math.Max(maxDim, OcrEngine.MaxImageDimension);
             if (longest > maxDim)
             {
                 double scale = (double)maxDim / longest;

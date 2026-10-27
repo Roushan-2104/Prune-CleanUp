@@ -20,6 +20,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_SUCCESS;
   }
 
+  // Windows 11 may move a minimised or hidden app onto its slow, power-saving
+  // cores ("EcoQoS"), most of all on battery. The photo check is work the
+  // user is waiting for, so ask to run at normal speed.
+  PROCESS_POWER_THROTTLING_STATE power{};
+  power.Version = PROCESS_POWER_THROTTLING_CURRENT_VERSION;
+  power.ControlMask = PROCESS_POWER_THROTTLING_EXECUTION_SPEED;
+  power.StateMask = 0;
+  ::SetProcessInformation(::GetCurrentProcess(), ProcessPowerThrottling,
+                          &power, sizeof(power));
+
   // Attach to console when present (e.g., 'flutter run') or create a
   // new console when running with a debugger.
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
