@@ -33,6 +33,11 @@ class CleanResult {
   final Object? stoppedBy;
 }
 
+/// Why Undo kept an item where it is: a newer file now sits at its place
+/// on the phone. Saved in the journal, so "Undo last clean-up" can leave
+/// these out instead of offering them again and again.
+const keptNewerFile = 'A newer file is in its place. The backup is still on this laptop.';
+
 /// %USERPROFILE%\Prune Backups
 String get backupRoot =>
     '${Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path}\\Prune Backups';
@@ -204,7 +209,19 @@ class CleanRunner {
 
   /// Undoes a clean-up: takes files out of the phone's Trash, and copies
   /// deleted ones back from the laptop backup. Returns how many came back.
-  Future<int> undo(int session, {void Function(String step)? onProgress}) async {
+  ///
+  /// A backup is never copied over a file now at its place on the phone:
+  /// that item is skipped, stays 'done' (not counted as put back), and the
+  /// reason ([keptNewerFile]) is kept in the journal and passed to [onSkipped].
+  ///
+  /// Only a clean-up of this runner's own phone is undone; any other is
+  /// refused before the phone is touched, so one phone's Trash ids and
+  /// laptop backups never reach another phone.
+  Future<int> undo(int session,
+      {void Function(String step)? onProgress, void Function(String path, String why)? onSkipped}) async {
+    if (store.phoneOf(session) != serial) {
+      throw CleanError('this clean-up was made on another phone, so nothing was changed');
+    }
     var back = 0;
     final ops = store.opsOf(session).where((o) => o.state == OpState.done).toList();
     for (final (i, op) in ops.indexed) {
@@ -221,6 +238,10 @@ class CleanRunner {
         back++;
       } on PhoneDisconnected {
         rethrow;
+      } on PlaceTaken {
+        // Something newer is there now; it is kept, and so is the backup.
+        store.markOp(op.id, OpState.done, error: keptNewerFile);
+        onSkipped?.call(op.path, keptNewerFile);
       } catch (_) {
         // leave as 'done'; shown as not restored
       }

@@ -1,3 +1,7 @@
 tags:
-  emulator: {} # needs a running virtual phone; changes files on it
+  # Needs a running virtual phone; changes files on it. Skipped by default so
+  # a plain "flutter test" never runs it. To run it on purpose:
+  #   flutter test --run-skipped --tags emulator test/cleaning_test.dart
+  emulator:
+    skip: "Changes files on a virtual phone. Run on purpose with: flutter test --run-skipped --tags emulator"
   phone: {} # needs a connected phone; read-only

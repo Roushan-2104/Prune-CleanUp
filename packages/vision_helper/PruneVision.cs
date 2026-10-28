@@ -32,10 +32,28 @@ using Windows.Media.Ocr;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
+// Built without a project file, so say which .NET Framework this is written
+// for: 4.6.2 and later let System.IO use paths of 260 characters or more
+// (in their \\?\ form, see LongForm); older ones refuse them outright.
+[assembly: System.Runtime.Versioning.TargetFramework(".NETFramework,Version=v4.6.2")]
+
 static class Program
 {
     // Face detection doesn't need full resolution; this keeps it fast.
     const uint FaceMaxDimension = 1280;
+
+    /// Pictures with more pixels than this are not read at all. Decoding
+    /// while shrinking keeps memory small whatever the size, but a crafted
+    /// file can claim any size it likes, and decoding gigapixels takes
+    /// minutes. 250 megapixels still allows the biggest phone photos
+    /// (200 MP), and long scrolling screenshots of any length.
+    const ulong MaxPixels = 250000000;
+
+    /// Decoding once at full size (see Picture) holds the whole picture in
+    /// memory, 4 bytes a pixel: about 256 MB at this size. Bigger pictures
+    /// are decoded separately for each job instead, which gives the same
+    /// result with far less memory.
+    const ulong DecodeOnceMaxPixels = 64000000;
 
     static int Main(string[] args)
     {
@@ -75,10 +93,71 @@ static class Program
     /// after each list's replies comes `{"end":n}`. Stops when the folder is
     /// deleted, a file named "stop" appears in it, the process with id
     /// <parent pid> (if given) ends, or nobody reads the replies any more.
+    /// On the way out it removes the folder (see RemoveServeFolder), so a
+    /// closed or crashed caller doesn't leave it behind in %TEMP%.
     static int Serve(OcrEngine ocr, string folder, string parentPid)
     {
-        FaceDetector faces = null;
         folder = Path.GetFullPath(folder);
+        try
+        {
+            return ServeLists(ocr, folder, parentPid);
+        }
+        finally
+        {
+            RemoveServeFolder(folder);
+        }
+    }
+
+    /// Removes what serve mode puts in its folder (lists 1.txt, 2.txt, …,
+    /// lists still being written, n.tmp, and "stop"), then the folder if
+    /// that leaves it empty. Anything else is left alone: the caller names
+    /// the folder, so never delete what this helper didn't put there.
+    static void RemoveServeFolder(string folder)
+    {
+        try
+        {
+            if (!Directory.Exists(folder)) return;
+            foreach (string file in Directory.GetFiles(folder))
+            {
+                if (IsServeFile(Path.GetFileName(file))) DeleteGone(() => File.Delete(file));
+            }
+            if (Directory.GetFileSystemEntries(folder).Length == 0) DeleteGone(() => Directory.Delete(folder, false));
+        }
+        catch (Exception e)
+        {
+            Trace("folder not removed: " + e.Message);
+        }
+    }
+
+    /// "stop", or a list's name: digits then ".txt" or ".tmp".
+    static bool IsServeFile(string name)
+    {
+        if (name == "stop") return true;
+        string ext = Path.GetExtension(name).ToLowerInvariant();
+        if (ext != ".txt" && ext != ".tmp") return false;
+        string stem = Path.GetFileNameWithoutExtension(name);
+        if (stem.Length == 0) return false;
+        foreach (char c in stem)
+        {
+            if (c < '0' || c > '9') return false;
+        }
+        return true;
+    }
+
+    /// Like Retry, but a file or folder that is already gone counts as done.
+    static void DeleteGone(Action delete)
+    {
+        Retry(() =>
+        {
+            try { delete(); }
+            catch (FileNotFoundException) { }
+            catch (DirectoryNotFoundException) { }
+        });
+    }
+
+    static int ServeLists(OcrEngine ocr, string folder, string parentPid)
+    {
+        FaceDetector faces = null;
         System.Diagnostics.Process parent = null;
         int pid;
         if (parentPid != null && int.TryParse(parentPid, out pid))
@@ -161,6 +240,42 @@ static class Program
             Thread.Sleep(20);
         }
     }
+
+    /// Paths this long (or longer) get the \\?\ form; Windows' own limit is
+    /// 260 characters, folders a little less, so this leaves some room.
+    const int LongPathFrom = 240;
+
+    /// The full path, in the \\?\ form when it is too long for Windows'
+    /// usual limit. Only .NET and plain Win32 calls take that form.
+    static string LongForm(string path)
+    {
+        string full = Path.GetFullPath(path);
+        if (full.Length < LongPathFrom || full.StartsWith(@"\\?\")) return full;
+        if (full.StartsWith(@"\\")) return @"\\?\UNC\" + full.Substring(2); // a network share
+        return @"\\?\" + full;
+    }
+
+    /// Opens a file for reading. StorageFile refuses long paths, even in
+    /// the \\?\ form, so those are opened by the Win32 call underneath it,
+    /// which takes that form; the stream and its bytes are the same.
+    static IRandomAccessStream OpenRead(string path)
+    {
+        string full = LongForm(path);
+        if (!full.StartsWith(@"\\?\"))
+        {
+            StorageFile file = Await(StorageFile.GetFileFromPathAsync(full));
+            return Await(file.OpenAsync(FileAccessMode.Read));
+        }
+        Guid iid = typeof(IRandomAccessStream).GUID;
+        object stream;
+        int hr = CreateRandomAccessStreamOnFile(full, (uint)FileAccessMode.Read, ref iid, out stream);
+        if (hr != 0) Marshal.ThrowExceptionForHR(hr);
+        return (IRandomAccessStream)stream;
+    }
+
+    [DllImport("shcore.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    static extern int CreateRandomAccessStreamOnFile(string path, uint accessMode, ref Guid riid,
+        [MarshalAs(UnmanagedType.IInspectable)] out object stream);
 
     /// The reply to one line of a list, or null for a blank line.
     static string Answer(OcrEngine ocr, ref FaceDetector faces, string defaultJobs, string raw)
@@ -297,21 +412,23 @@ static class Program
     {
         try
         {
-            StorageFile file = Await(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
-            Windows.Data.Pdf.PdfDocument doc = Await(Windows.Data.Pdf.PdfDocument.LoadFromFileAsync(file));
-            if (doc.PageCount == 0) return null;
-            using (Windows.Data.Pdf.PdfPage page = doc.GetPage(0))
-            using (InMemoryRandomAccessStream s = new InMemoryRandomAccessStream())
+            using (IRandomAccessStream input = OpenRead(path))
             {
-                Windows.Data.Pdf.PdfPageRenderOptions o = new Windows.Data.Pdf.PdfPageRenderOptions();
-                o.DestinationWidth = 600; // PNG unless told otherwise
-                // A very tall page: only its top (at most 4 widths high), so
-                // the picture stays small whatever size the page claims.
-                Windows.Foundation.Size size = page.Size;
-                if (size.Width <= 0 || size.Height <= 0) return null;
-                if (size.Height > 4 * size.Width) o.SourceRect = new Windows.Foundation.Rect(0, 0, size.Width, 4 * size.Width);
-                AwaitAction(page.RenderToStreamAsync(s, o));
-                return ReadAll(s);
+                Windows.Data.Pdf.PdfDocument doc = Await(Windows.Data.Pdf.PdfDocument.LoadFromStreamAsync(input));
+                if (doc.PageCount == 0) return null;
+                using (Windows.Data.Pdf.PdfPage page = doc.GetPage(0))
+                using (InMemoryRandomAccessStream s = new InMemoryRandomAccessStream())
+                {
+                    Windows.Data.Pdf.PdfPageRenderOptions o = new Windows.Data.Pdf.PdfPageRenderOptions();
+                    o.DestinationWidth = 600; // PNG unless told otherwise
+                    // A very tall page: only its top (at most 4 widths high), so
+                    // the picture stays small whatever size the page claims.
+                    Windows.Foundation.Size size = page.Size;
+                    if (size.Width <= 0 || size.Height <= 0) return null;
+                    if (size.Height > 4 * size.Width) o.SourceRect = new Windows.Foundation.Rect(0, 0, size.Width, 4 * size.Width);
+                    AwaitAction(page.RenderToStreamAsync(s, o));
+                    return ReadAll(s);
+                }
             }
         }
         catch (Exception e)
@@ -328,7 +445,7 @@ static class Program
     {
         try
         {
-            using (System.IO.Compression.ZipArchive zip = System.IO.Compression.ZipFile.OpenRead(path))
+            using (System.IO.Compression.ZipArchive zip = System.IO.Compression.ZipFile.OpenRead(LongForm(path)))
             {
                 System.IO.Compression.ZipArchiveEntry best = null;
                 int bestRank = 0;
@@ -409,6 +526,7 @@ static class Program
     static byte[] ShellThumbnail(string path)
     {
         IShellItemImageFactory factory;
+        // The shell takes long paths as they are, but not in the \\?\ form.
         SHCreateItemFromParsingName(Path.GetFullPath(path), IntPtr.Zero, typeof(IShellItemImageFactory).GUID, out factory);
         IntPtr hbm;
         int hr = factory.GetImage(new NativeSize { cx = 256, cy = 256 }, 0, out hbm); // 0: thumbnail, else icon
@@ -541,14 +659,20 @@ static class Program
         /// that, instead of decoding a 12-megapixel photo two times. The
         /// result is the same, pixel for pixel: it is the same filter, in the
         /// same order, that Windows uses while decoding. Only for opaque JPEG
-        /// and PNG with a known orientation, where that was checked.
+        /// and PNG with a known orientation, where that was checked, and of
+        /// at most DecodeOnceMaxPixels. Pictures over MaxPixels are refused.
         public Picture(string path, bool decodeOnce)
         {
-            StorageFile file = Await(StorageFile.GetFileFromPathAsync(Path.GetFullPath(path)));
-            stream = Await(file.OpenAsync(FileAccessMode.Read));
+            stream = OpenRead(path);
             try
             {
                 decoder = Await(BitmapDecoder.CreateAsync(stream));
+                // The size comes from the file's header; nothing is decoded yet.
+                if ((ulong)decoder.PixelWidth * decoder.PixelHeight > MaxPixels)
+                {
+                    throw new InvalidDataException("picture too big to check (" +
+                        decoder.PixelWidth + " x " + decoder.PixelHeight + " px)");
+                }
             }
             catch
             {
@@ -557,6 +681,7 @@ static class Program
             }
             Guid codec = decoder.DecoderInformation.CodecId;
             if (decodeOnce && Wic.Available && decoder.BitmapAlphaMode == BitmapAlphaMode.Ignore &&
+                (ulong)decoder.PixelWidth * decoder.PixelHeight <= DecodeOnceMaxPixels &&
                 (codec == BitmapDecoder.JpegDecoderId || codec == BitmapDecoder.PngDecoderId))
             {
                 turn = Wic.TurnFor(Orientation());

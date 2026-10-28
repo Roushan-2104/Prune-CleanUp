@@ -1,12 +1,16 @@
 import 'dart:io';
+import 'dart:math' show max;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:phone_link/phone_link.dart';
 
 import 'dev_log.dart';
+import 'previews.dart';
 import 'review_media.dart';
 
 /// Small square preview for list rows: the photo itself, a frame from the
@@ -70,13 +74,13 @@ class _FileThumbState extends State<FileThumb> {
           future: image,
           builder: (context, snap) => snap.data == null
               ? Icon(Icons.photo_outlined, color: c.onSurfaceVariant)
-              : Image.file(
-                  snap.data!,
+              : Image(
+                  image: SafeFileImage(snap.data!, width: cache),
                   fit: BoxFit.cover,
                   // Screenshots carry what matters at the top: the chat name, "Payment Successful".
                   alignment: fill ? Alignment.topCenter : Alignment.center,
-                  cacheWidth: cache,
                   gaplessPlayback: true,
+                  errorBuilder: (context, error, _) => _NoPreview(error: error, small: !fill),
                 ),
         ),
       );
@@ -123,18 +127,42 @@ class _FileThumbState extends State<FileThumb> {
 /// archives… shown by [ReviewMedia.documentPreview].
 bool isDocument(PhoneFile f) => !f.isImage && !f.isVideo && !f.isAudio;
 
-/// Files Windows would run rather than show: programs, scripts, shortcuts,
-/// installers and macro-enabled documents.
-bool isRunnable(String path) {
-  final dot = path.lastIndexOf('.');
-  final ext = dot < 0 ? '' : path.substring(dot + 1).toLowerCase();
-  return const {
-    'exe', 'com', 'scr', 'pif', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta',
-    'msi', 'msp', 'msix', 'appx', 'appinstaller', 'application', 'lnk', 'url', 'reg', 'jar', 'cpl', 'dll', 'sys',
-    'inf', 'sct', 'chm', 'gadget', 'iso', 'img', 'vhd', 'vhdx', 'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm',
-    'potm', 'ppam', 'sldm',
-  }.contains(ext);
+/// The lower-case extension of [path] as Windows sees it (trailing dots
+/// and spaces are ignored, as Windows ignores them), or '' if none.
+String _extension(String path) {
+  final name = path.split(RegExp(r'[\\/]')).last.replaceAll(RegExp(r'[. ]+$'), '');
+  final dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.substring(dot + 1).toLowerCase();
 }
+
+/// The only kinds of file "Open in its usual app" will open: documents,
+/// contacts and zips, all opened in apps that respect the
+/// downloaded-from-the-internet mark. Everything else is only shown in a
+/// folder, so opening it there is a deliberate choice.
+bool opensInUsualApp(String path) => const {
+  'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'txt', 'csv', 'rtf', 'vcf', 'zip',
+}.contains(_extension(path));
+
+/// Shortcut-like files Windows may follow just by drawing them in a folder
+/// (their icon or target can point at another computer), so Prune does not
+/// even show them in one.
+bool isShortcutLike(String path) => const {
+  'lnk', 'url', 'library-ms', 'searchconnector-ms', 'scf',
+}.contains(_extension(path));
+
+/// Files Windows would run, or that can reach out to the internet, rather
+/// than simply show: programs, scripts, shortcuts, installers,
+/// macro-enabled documents, and web pages, mail and drawings that can load
+/// remote content. Used to explain why a file is only shown in its folder.
+bool isRunnable(String path) => const {
+  'exe', 'com', 'scr', 'pif', 'bat', 'cmd', 'ps1', 'psm1', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'wsc', 'hta',
+  'py', 'pyw', 'jnlp', 'msc', 'diagcab', 'theme', 'themepack', 'deskthemepack', 'library-ms',
+  'searchconnector-ms', 'settingcontent-ms', 'appref-ms', 'rdp', 'scf', 'xll', 'mht', 'mhtml', 'html', 'htm',
+  'xhtml', 'svg', 'eml', 'xml',
+  'msi', 'msp', 'msix', 'appx', 'appinstaller', 'application', 'lnk', 'url', 'reg', 'jar', 'cpl', 'dll', 'sys',
+  'inf', 'sct', 'chm', 'gadget', 'iso', 'img', 'vhd', 'vhdx', 'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm',
+  'potm', 'ppam', 'sldm',
+}.contains(_extension(path));
 
 /// Marks a copied file as downloaded from the internet (its
 /// Zone.Identifier, as a browser would), so Windows' own SmartScreen and
@@ -145,6 +173,84 @@ void markFromInternet(String path) {
   } catch (_) {
     // Not NTFS (e.g. a FAT USB drive): nothing to mark.
   }
+}
+
+/// Photos bigger than this are not decoded: a small file can claim to be
+/// enormous and make the decoder ask for gigabytes of memory. Memory follows
+/// the pixel count, so that is the real limit; the side limit is only PNG's
+/// practical bound, and long scrolling screenshots of any length still show.
+const maxImageSide = 65535;
+const maxImagePixels = 50 * 1000 * 1000;
+
+/// JPEGs are decoded straight to a smaller size (an eighth at most), so
+/// genuine 108 and 200 megapixel phone photos stay viewable.
+const maxJpegSide = 20000;
+const maxJpegPixels = 260 * 1000 * 1000;
+
+/// Whether an image of [width] x [height] is too big to decode safely.
+bool tooBigToShow(int width, int height, {bool jpeg = false}) =>
+    width > (jpeg ? maxJpegSide : maxImageSide) ||
+    height > (jpeg ? maxJpegSide : maxImageSide) ||
+    width * height > (jpeg ? maxJpegPixels : maxImagePixels);
+
+/// Thrown instead of decoding an image whose claimed size is too big.
+class ImageTooLarge implements Exception {
+  ImageTooLarge(this.width, this.height);
+  final int width, height;
+  @override
+  String toString() => 'Too large to preview ($width x $height pixels)';
+}
+
+/// A photo from a local file, decoded at most [width] wide or [maxSide] on
+/// its longest side, and never decoded at all if its header claims a size
+/// beyond [tooBigToShow] (see [ImageTooLarge]). The size is read from the
+/// header before any pixels, and the file is read only once.
+class SafeFileImage extends ImageProvider<SafeFileImage> {
+  const SafeFileImage(this.file, {this.width, this.maxSide});
+  final File file;
+  final int? width;
+  final int? maxSide;
+
+  @override
+  Future<SafeFileImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture(this);
+
+  @override
+  ImageStreamCompleter loadImage(SafeFileImage key, ImageDecoderCallback decode) =>
+      MultiFrameImageStreamCompleter(codec: _load(decode), scale: 1, debugLabel: file.path);
+
+  Future<ui.Codec> _load(ImageDecoderCallback decode) async {
+    final raf = await file.open();
+    final Uint8List head;
+    try {
+      head = await raf.read(3);
+    } finally {
+      await raf.close();
+    }
+    if (head.isEmpty) throw StateError('${file.path} is empty');
+    final jpeg = head.length == 3 && head[0] == 0xFF && head[1] == 0xD8 && head[2] == 0xFF;
+    final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+    return decode(buffer, getTargetSize: (w, h) {
+      if (tooBigToShow(w, h, jpeg: jpeg)) throw ImageTooLarge(w, h);
+      return targetSize(w, h, width: width, maxSide: maxSide);
+    });
+  }
+
+  /// The size to decode a [w] x [h] image at: never larger than it is.
+  static ui.TargetImageSize targetSize(int w, int h, {int? width, int? maxSide}) {
+    if (width != null && width < w) return ui.TargetImageSize(width: width);
+    if (maxSide != null && max(w, h) > maxSide) {
+      final scale = maxSide / max(w, h);
+      return ui.TargetImageSize(width: max(1, (w * scale).round()), height: max(1, (h * scale).round()));
+    }
+    return const ui.TargetImageSize();
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is SafeFileImage && other.file.path == file.path && other.width == width && other.maxSide == maxSide;
+
+  @override
+  int get hashCode => Object.hash(file.path, width, maxSide);
 }
 
 /// A file name as shown on screen, with invisible direction marks made
@@ -352,17 +458,34 @@ class MediaViewState extends State<MediaView> {
     final f = await _local;
     if (f == null) return;
     final explorer = '${Platform.environment['SystemRoot'] ?? r'C:\Windows'}\\explorer.exe';
-    if (isRunnable(f.path)) {
-      // A program or script from the phone is never run from here: show it
-      // in its folder instead, so opening it is a deliberate choice.
-      await Process.run(explorer, ['/select,', f.path]);
+    if (opensInUsualApp(f.path)) {
+      markFromInternet(f.path); // already marked when copied; kept as a second guard
+      await Process.run(explorer, [f.path]);
+      return;
+    }
+    if (isShortcutLike(f.path)) {
+      // Explorer can follow a shortcut just by drawing it, so it isn't shown at all.
       if (mounted) {
-        setState(() => error = 'Prune does not open programs or scripts. It is shown in its folder instead.');
+        setState(() => error = 'This is a shortcut. Prune does not open or show shortcuts from a phone.');
       }
       return;
     }
-    markFromInternet(f.path);
-    await Process.run(explorer, [f.path]);
+    // Anything else is never opened from here: it is shown alone in a new
+    // folder instead, so opening it is a deliberate choice and nothing else
+    // from the phone sits next to it.
+    final File alone;
+    try {
+      alone = PreviewCache.aloneInFolder(f);
+    } catch (_) {
+      if (mounted) setState(() => error = 'Couldn\'t show ${displayName(widget.file.name)} in a folder.');
+      return;
+    }
+    await Process.run(explorer, ['/select,', alone.path]);
+    if (mounted) {
+      setState(() => error = isRunnable(f.path)
+          ? 'Prune does not open programs or scripts. It is shown in its folder instead.'
+          : 'Prune opens only documents. This file is shown in its folder instead.');
+    }
   }
 
   @override
@@ -392,11 +515,12 @@ class MediaViewState extends State<MediaView> {
             ? const Center(child: Text('Preview not available'))
             : InteractiveViewer(
                 maxScale: 6,
-                // Held at most 4096 px a side, whatever size the file claims.
+                // Held at most 4096 px a side, and not decoded at all if
+                // the file claims a size too big to decode safely.
                 child: Image(
-                  image: ResizeImage(FileImage(snap.data!),
-                      width: 4096, height: 4096, policy: ResizeImagePolicy.fit, allowUpscaling: false),
+                  image: SafeFileImage(snap.data!, maxSide: 4096),
                   fit: BoxFit.contain,
+                  errorBuilder: (context, error, _) => Center(child: _NoPreview(error: error)),
                 ),
               ),
       );
@@ -459,13 +583,45 @@ class MediaViewState extends State<MediaView> {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: c.error),
               ),
-              TextButton(onPressed: play, child: const Text('Try again')),
+              _playable
+                  ? TextButton(onPressed: play, child: const Text('Try again'))
+                  : TextButton(onPressed: () => setState(() => error = null), child: const Text('OK')),
             ],
           ),
         ),
       );
     }
     return Container(height: widget.height, decoration: frame, clipBehavior: Clip.antiAlias, child: body);
+  }
+}
+
+/// Shown in place of a photo that couldn't be shown: the photo icon, and a
+/// short note when there is room for one.
+class _NoPreview extends StatelessWidget {
+  const _NoPreview({required this.error, this.small = false});
+  final Object error;
+  final bool small;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    final note = error is ImageTooLarge ? 'Too large to preview' : 'Preview not available';
+    final icon = Icon(Icons.photo_outlined, color: c.onSurfaceVariant);
+    if (small) return Tooltip(message: note, child: Center(child: icon));
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            const SizedBox(height: 6),
+            Text(note, textAlign: TextAlign.center, style: TextStyle(color: c.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
   }
 }
 

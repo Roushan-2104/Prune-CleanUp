@@ -16,6 +16,7 @@ void main() {
   MediaKit.ensureInitialized(); // in-app video and audio playback
   PreviewCache.clearAll(); // previews and photo copies never outlive a session…
   PhotoScan.clearWork();
+  clearStaleTempCopies(Directory.systemTemp); // left by a crash or power cut
   runApp(PruneApp(session: PhoneSession(Store.open(databasePath()))));
   // …and are deleted again when the window is closed.
   _exitListener = AppLifecycleListener(
@@ -25,6 +26,29 @@ void main() {
       return AppExitResponse.exit;
     },
   );
+}
+
+/// Folders of private photo copies that phone_link and the vision helper
+/// make in %TEMP% and normally delete as soon as they are done.
+const staleTempPrefixes = ['declutter_copy_', 'declutter_vision_', 'prune_vision_'];
+
+/// Deletes folders in [temp] named like [staleTempPrefixes]: copies a crash
+/// or power cut left behind. Nothing else in [temp] is touched.
+void clearStaleTempCopies(Directory temp) {
+  try {
+    for (final entry in temp.listSync(followLinks: false)) {
+      if (entry is! Directory) continue;
+      final name = entry.path.substring(entry.path.lastIndexOf(Platform.pathSeparator) + 1);
+      if (!staleTempPrefixes.any(name.startsWith)) continue;
+      try {
+        entry.deleteSync(recursive: true);
+      } catch (_) {
+        // Still in use: it goes next time.
+      }
+    }
+  } catch (_) {
+    // %TEMP% unreadable: nothing to clear.
+  }
 }
 
 // Kept so the listener lives as long as the app.

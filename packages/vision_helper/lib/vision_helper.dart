@@ -362,10 +362,20 @@ class _Helper {
     done?.complete(_replies);
   }
 
+  /// Asks the helper to stop, which also has it remove its folder; one that
+  /// is busy with a list (or stuck) is ended after a second. The folder is
+  /// removed here too, in case the helper couldn't.
   Future<void> stop() async {
     alive = false;
-    _process.kill();
-    await _process.exitCode.timeout(const Duration(seconds: 5), onTimeout: () => -1);
+    try {
+      File('${_dir.path}${Platform.pathSeparator}stop').writeAsStringSync('');
+    } on FileSystemException {
+      // the folder has gone: the helper stops by itself
+    }
+    await _process.exitCode.timeout(const Duration(seconds: 1), onTimeout: () {
+      _process.kill();
+      return _process.exitCode.timeout(const Duration(seconds: 5), onTimeout: () => -1);
+    });
     for (var i = 0; i < 20; i++) {
       try {
         if (_dir.existsSync()) _dir.deleteSync(recursive: true);

@@ -1,0 +1,13 @@
+tags:
+  # Needs a running virtual phone; changes files on it. Skipped by default so
+  # a plain "dart test" never runs it. To run it on purpose:
+  #   dart test -P emulator test/cleaner_test.dart
+  emulator:
+    skip: "Changes files on a virtual phone. Run on purpose with: dart test -P emulator"
+  phone: {} # needs a connected phone; read-only
+
+presets:
+  emulator:
+    tags:
+      emulator:
+        skip: false

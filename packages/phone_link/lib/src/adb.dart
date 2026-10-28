@@ -99,29 +99,35 @@ class Adb {
 
   /// Everything the phone's media index knows: photos, videos, audio,
   /// documents, downloads… Takes a few seconds even for 15k+ files.
-  Future<List<PhoneFile>> listFiles(String serial) async {
-    final out = await shell(serial,
-        'content query --uri content://media/external/file --projection ${mediaColumns.join(':')}');
-    return parseMediaRows(out);
-  }
+  Future<List<PhoneFile>> listFiles(String serial) async => parseMediaRows(await _mediaQuery(serial));
+
+  Future<String> _mediaQuery(String serial) =>
+      shell(serial, 'content query --uri content://media/external/file --projection ${mediaColumns.join(':')}');
 
   /// Every file on shared storage, including those Android's media list
   /// hides (WhatsApp "Sent" copies, private folders…). About 15–20 s for
   /// 60k files.
+  ///
+  /// A file the media list prints but whose row can't be trusted is left
+  /// out, never offered as hidden (see [mergeListings]).
   Future<List<PhoneFile>> listAllFiles(String serial) async {
-    final media = await listFiles(serial);
+    final out = await _mediaQuery(serial);
     final found = await shell(serial, "find ${shellQuote(storageRoot)} -type f -printf '$findFormat'");
-    return mergeListings(media, parseFindRows(found));
+    return mergeListings(parseMediaRows(out), parseFindRows(found), printed: MediaListedPaths(out));
   }
 
   /// Content fingerprints (MD5) computed on the phone, so exact duplicates
   /// are found without copying anything. Returns path → hash; files that
   /// couldn't be read are left out.
+  ///
+  /// Paths with a newline, carriage return or backslash are never
+  /// fingerprinted: md5sum prints one line per file, so such a name could
+  /// print a line that looks like another file's hash.
   Future<Map<String, String>> fingerprints(String serial, List<String> paths,
       {void Function(int done)? onProgress}) async {
     final result = <String, String>{};
     var batch = <String>[];
-    var length = 0, done = 0;
+    var length = 0, done = 0, reported = 0;
 
     Future<void> flush() async {
       if (batch.isEmpty) return;
@@ -131,23 +137,48 @@ class Adb {
       final r = await Process.run(adbPath, ['-s', serial, 'shell', command], stdoutEncoding: utf8, stderrEncoding: utf8);
       final out = r.stdout as String;
       if (r.exitCode != 0 && out.isEmpty) throw _failure(r.stderr as String, r.exitCode);
-      for (final line in LineSplitter.split(out)) {
-        final m = RegExp(r'^([0-9a-f]{32})  (.+)$').firstMatch(line);
-        if (m != null) result[m.group(2)!] = m.group(1)!;
-      }
+      result.addAll(parseMd5Output(out, batch));
       done += batch.length;
-      onProgress?.call(done);
+      onProgress?.call(reported = done);
       batch = [];
       length = 0;
     }
 
     for (final p in paths) {
+      if (!canFingerprint(p)) {
+        done++; // left out, but counted as checked
+        continue;
+      }
       batch.add(p);
       length += p.length + 3;
       if (batch.length >= 40 || length > 6000) await flush();
     }
     await flush();
+    if (done != reported) onProgress?.call(done); // paths left out at the end
     return result;
+  }
+
+  /// Whether [path] is safe to fingerprint: no newline, carriage return or
+  /// backslash, any of which could make md5sum's output name another file.
+  static bool canFingerprint(String path) =>
+      !path.contains('\n') && !path.contains('\r') && !path.contains(r'\');
+
+  /// Reads `md5sum` output for one batch. A line counts only if it names a
+  /// path from [requested] (and safe to fingerprint), and only if that path
+  /// appears exactly once; anything else could be forged, so it is dropped.
+  static Map<String, String> parseMd5Output(String output, Iterable<String> requested) {
+    final asked = {for (final p in requested) if (canFingerprint(p)) p};
+    final hashes = <String, String>{};
+    final seen = <String, int>{};
+    for (final line in LineSplitter.split(output)) {
+      final m = RegExp(r'^([0-9a-f]{32})  (.+)$').firstMatch(line);
+      if (m == null) continue;
+      final path = m.group(2)!;
+      if (!asked.contains(path)) continue;
+      seen.update(path, (n) => n + 1, ifAbsent: () => 1);
+      hashes[path] = m.group(1)!;
+    }
+    return {for (final e in hashes.entries) if (seen[e.key] == 1) e.key: e.value};
   }
 
   /// Copies many phone files to the laptop in batches — much faster than one
@@ -175,8 +206,12 @@ class Adb {
       for (final f in batch) {
         final tmp = File(inside(dir.path, [f.name]));
         if (await tmp.exists() && await tmp.length() == f.bytes) {
-          await _moveInto(tmp, localPathFor(f));
-          report._ok(f);
+          try {
+            await _moveInto(tmp, localPathFor(f));
+            report._ok(f);
+          } on FileSystemException catch (e) {
+            report.failed[f] = '$e'; // e.g. a file already there: never replaced
+          }
         } else {
           missing.add(f);
         }
@@ -253,13 +288,26 @@ class Adb {
     return batches;
   }
 
+  /// Moves [from] to [to], never replacing a file already there.
   static Future<void> _moveInto(File from, String to) async {
     await File(to).parent.create(recursive: true);
+    ensureFree(to);
     try {
       await from.rename(to);
     } on FileSystemException {
+      ensureFree(to); // the rename may have failed because something is there
       await from.copy(to); // different drive: copy, then remove the temp file
       await from.delete();
+    }
+  }
+
+  /// Throws unless nothing is at [path] on the laptop. Checked right before
+  /// each rename, because a rename replaces what's there, and Windows also
+  /// answers to short names ("IMG_20~1.JPG"): a name that looks new may be
+  /// another backup's short name. [File.existsSync] sees both.
+  static void ensureFree(String path) {
+    if (File(path).existsSync() || Directory(path).existsSync()) {
+      throw FileSystemException('Not copied: a file is already at this place on the laptop', path);
     }
   }
 
@@ -268,13 +316,16 @@ class Adb {
   /// Writes to "<localPath>.part" first and renames only when every byte has
   /// arrived and the size matches, so an interrupted copy never leaves a
   /// half file — and the phone is only ever read from.
+  ///
+  /// Never replaces anything on the laptop: if a file is already at
+  /// [localPath] (or one of its short names), it throws instead.
   Future<void> copyToLaptop(String serial, PhoneFile file, String localPath,
       {void Function(int bytesSoFar)? onProgress}) async {
     final command = 'cat ${shellQuote(file.path)}';
     ensureReadOnly(command);
 
-    final part = File('$localPath.part');
-    await part.parent.create(recursive: true);
+    ensureFree(localPath);
+    final part = await _newPartFile(localPath);
     final sink = part.openWrite();
     var received = 0;
     try {
@@ -291,11 +342,27 @@ class Adb {
       if (file.bytes > 0 && received != file.bytes) {
         throw PhoneDisconnected('copy of ${file.name} stopped at $received of ${file.bytes} bytes');
       }
+      ensureFree(localPath);
       await part.rename(localPath);
     } catch (_) {
       await sink.close().catchError((_) {});
       if (await part.exists()) await part.delete();
       rethrow;
+    }
+  }
+
+  /// Creates an empty "<localPath>.part" for a copy in progress, only if no
+  /// file has that name; otherwise "<localPath>.2.part", and so on. Created
+  /// exclusively, so it never truncates a file that is already there.
+  static Future<File> _newPartFile(String localPath) async {
+    await File(localPath).parent.create(recursive: true);
+    for (var n = 1;; n++) {
+      final part = File(n == 1 ? '$localPath.part' : '$localPath.$n.part');
+      try {
+        return await part.create(exclusive: true);
+      } on FileSystemException {
+        if (n >= 20) rethrow;
+      }
     }
   }
 

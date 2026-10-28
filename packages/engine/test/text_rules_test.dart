@@ -47,8 +47,8 @@ Debited from XXXX1234''';
   group('payment vs chat', () {
     test('GPay chat thread with many times is a payment, not a chat', () {
       const text = '''
-Nikhil Sharma
-+91 98765 43210
+Ravi Kumar
++91 90000 00001
 ₹500
 Paid · 10:12 pm
 ₹200
@@ -75,7 +75,7 @@ Pay   Request   Message''';
 
   group('other screenshot labels', () {
     test('Instagram reel', () {
-      expect(classifyScreenshotText('nikhil.k_ Follow\nOriginal audio\nLiked by meera and 2,304 others').label,
+      expect(classifyScreenshotText('sample.user_ Follow\nOriginal audio\nLiked by aditi and 2,304 others').label,
           'Instagram');
     });
     test('shopping page', () {
@@ -102,11 +102,11 @@ Pay   Request   Message''';
           expect(v.tier, Tier.sure, reason: v.toString());
         });
 
-    sure('PayPal (US)', 'PayPal\nYou sent \$25.00 USD to John Smith\nTransaction ID\n3AB12345CD678901E');
-    sure('Venmo', 'Venmo\nYou paid Sarah Lee\n\$12.50\nPayment ID 3891776\nToday at 9:41 PM');
+    sure('PayPal (US)', 'PayPal\nYou sent \$25.00 USD to Sam Sample\nTransaction ID\n3AB12345CD678901E');
+    sure('Venmo', 'Venmo\nYou paid Test Person\n\$12.50\nPayment ID 3891776\nToday at 9:41 PM');
     sure('Revolut (euro after the number)', 'Revolut\n45,20 €\nPayment completed\nReference: Dinner');
-    sure('UK bank transfer (£)', 'Monzo\n£120.00\nPayment sent to Tom\nReference number 88271');
-    sure('Cash App', 'Cash App\nYou sent \$40\nto \$jsmith\nTransaction number #D-7G2K');
+    sure('UK bank transfer (£)', 'Monzo\n£120.00\nPayment sent to Sam\nReference number 88271');
+    sure('Cash App', 'Cash App\nYou sent \$40\nto \$samsample\nTransaction number #D-7G2K');
     sure('GCash (₱)', 'GCash\nYou sent ₱1,500.00\nRef No. 0012 345 678901\nTransfer complete');
 
     test('a shopping page with a price is not a payment', () {
@@ -125,7 +125,7 @@ Pay   Request   Message''';
 
   group('worldwide chats', () {
     test('Telegram with 24-hour times', () {
-      const text = 'Alex\nlast seen recently\nAre we still on for tonight? 21:04\nYes! 21:05\n'
+      const text = 'Sam\nlast seen recently\nAre we still on for tonight? 21:04\nYes! 21:05\n'
           'See you at 8 21:05\nGreat 21:07\nWrite a message…';
       final v = classifyScreenshotText(text);
       expect(v.category, JunkCategory.chatScreenshot);
@@ -139,17 +139,17 @@ Pay   Request   Message''';
 
   group('chats are told apart by app', () {
     test('WhatsApp: read ticks after each time (OCR reads ✓✓ as "W", "V/")', () {
-      const text = '22:26\nNikhil\nYou\nKal milte hain\n22:23\n22:24 w\nTheek hai\n22:24 W\nOk bye 22:25 V/';
+      const text = '22:26\nAditi\nYou\nSee you soon\n22:23\n22:24 w\nSounds good\n22:24 W\nOk bye 22:25 V/';
       final v = classifyScreenshotText(text);
       expect(v.category, JunkCategory.chatScreenshot);
       expect(v.label, 'WhatsApp chats');
     });
     test('Instagram DM', () {
-      const text = '10:12\nalex.k\nActive now\nReplied to your story\nhaha nice\nMessage...';
+      const text = '10:12\nsample.user\nActive now\nReplied to your story\nhaha nice\nMessage...';
       expect(classifyScreenshotText(text).label, 'Instagram DMs');
     });
     test("LinkedIn's \"Write a message...\" is not an Instagram DM", () {
-      const text = '21:03\nMeera Iyer\nMobile • 6m ago\nMeera Iyer (She/Her) • 8:43 PM\nThanks for connecting!\n'
+      const text = '21:03\nNeha Rao\nMobile • 6m ago\nNeha Rao (She/Her) • 8:43 PM\nThanks for connecting!\n'
           'You • 8:50 PM\nSure\nWrite a message...';
       expect(classifyScreenshotText(text).label, 'LinkedIn messages');
     });
@@ -164,21 +164,21 @@ Pay   Request   Message''';
       expect(classifyScreenshotText(text).category, isNot(JunkCategory.chatScreenshot));
     });
     test('a train booking page is not a chat', () {
-      const text = '10:21\nNDLS - Agra\n18:50 Fri, 12 Mar\n23:00 Sat, 13 Mar\nFew Seats\n07:30 PNR\nPassenger details';
+      const text = '10:21\nAAA - Sampleton\n18:50 Mon, 2 Mar\n23:00 Tue, 3 Mar\nFew Seats\n07:30 PNR\nPassenger details';
       expect(classifyScreenshotText(text).category, isNot(JunkCategory.chatScreenshot));
     });
   });
 
   group('payments need proof', () {
     test('OCR turns ₹ into "?" and zeros into "O": still a receipt', () {
-      const text = 'QIOO.OO\nPaid to\nAMIT SINGH\nPhonePe • 9876543210@ybl\n24 December 2025, 9:50 pm';
+      const text = 'QIOO.OO\nPaid to\nRAVI KUMAR\nPhonePe • 9000000002@ybl\n1 January 2026, 9:50 pm';
       final v = classifyScreenshotText(text);
       expect(v.category, JunkCategory.paymentScreenshot);
       expect(v.tier, Tier.sure);
       expect(v.label, 'PhonePe payments');
     });
     test('"Payment Successful" with a UPI ID but an unreadable amount is still sure', () {
-      const text = '19:30\nPayment Successful\n22 February 2026 at 07:30 PM\nTiffin Corner\n9000000001@okbizaxis\n'
+      const text = '19:30\nPayment Successful\n22 February 2026 at 07:30 PM\nSample Cafe\n9000000001@okbizaxis\n'
           'View Details\nDone\nShare Receipt';
       final v = classifyScreenshotText(text);
       expect(v.category, JunkCategory.paymentScreenshot);
@@ -186,7 +186,7 @@ Pay   Request   Message''';
       expect(v.label, 'UPI payments');
     });
     test('a shop\'s "Scan & Pay" QR code is not a receipt', () {
-      const text = 'PhonePe\nACCEPTED HERE\nScan & Pay Using PhonePe App\nSample Stores\nshop123@ybl';
+      const text = 'PhonePe\nACCEPTED HERE\nScan & Pay Using PhonePe App\nSample Store\nsampleshop@ybl';
       final v = classifyScreenshotText(text);
       expect(v.category, JunkCategory.otherScreenshot);
       expect(v.label, 'Payment QR codes');
@@ -196,14 +196,14 @@ Pay   Request   Message''';
       expect(classifyScreenshotText(text).category, isNot(JunkCategory.paymentScreenshot));
     });
     test('an email footer "You received this message" is not a payment', () {
-      const text = '2:19 PM\nImran\nOct 23, 2025\nPlease share how to enroll ₹500\n'
+      const text = '2:19 PM\nAditi\nJan 5, 2026\nPlease share how to join ₹500\n'
           'You received this message because you are subscribed';
       expect(classifyScreenshotText(text).category, isNot(JunkCategory.paymentScreenshot));
     });
   });
 
   group('status bar', () {
-    test('clock at the very top', () => expect(hasStatusBar('17:50 0 @ m\nAdmissions 2025\nDear Candidate'), isTrue));
+    test('clock at the very top', () => expect(hasStatusBar('17:50 0 @ m\nExam Board 2026\nDear Candidate'), isTrue));
     test('battery and clock on the first line', () => expect(hasStatusBar('LTE 64% 10:21\nTrain list'), isTrue));
     test('a poster with a time in the middle has none',
         () => expect(hasStatusBar('THE PLAY\nfrom the world of\nSherlock Holmes\n10 SEPTEMBER 6:30 PM'), isFalse));
@@ -212,9 +212,9 @@ Pay   Request   Message''';
   group('chat screenshots', () {
     test('WhatsApp chat is sure', () {
       const text = '''
-Nikhil
+Aditi
 online
-Bhai kal aa raha hai? 10:12 pm
+Are you coming tomorrow? 10:12 pm
 Haan 10:13 pm
 Kitne baje 10:13 pm
 Shaam ko 10:15 pm

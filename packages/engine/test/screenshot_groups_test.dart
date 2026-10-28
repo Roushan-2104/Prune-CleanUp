@@ -13,7 +13,7 @@ void main() {
     });
     test('OCR noise around the name is trimmed', () {
       expect(chatTitle('22:54 8 M\nA Neel7\nNo idea'), 'Neel7');
-      expect(chatTitle('1:02 M •\no "80/0\nAman Kapoor Oq\nsee you'), 'Aman Kapoor');
+      expect(chatTitle('1:02 M •\no "80/0\nNeha Singh Oq\nsee you'), 'Neha Singh');
     });
     test('a contact saved as a number', () => expect(chatTitle('13:48\n+91 90000 12345\nToday'), '+91 90000 12345'));
     test('app words are never names', () => expect(chatTitle('3:52\nInstagram • Chats\nSearch or ask a question'), isNull));
@@ -21,31 +21,31 @@ void main() {
 
   test('chats with one person get their own group; one-offs do not', () {
     final shots = {
-      for (var i = 0; i < 3; i++) '/vikram$i': (_wa, '10:1$i\nVikram Bhai\nhaan ${i}0:12 pm'),
+      for (var i = 0; i < 3; i++) '/ravi$i': (_wa, '10:1$i\nRavi Kumar\nyes ${i}0:12 pm'),
       '/once': (_wa, '10:12\nRandom Person\nhello'),
     };
     final g = groupScreenshots(shots);
-    expect(g['/vikram0']!.label, 'Vikram Bhai · WhatsApp');
-    expect(g['/vikram0']!.evidence['Chat with'], 'Vikram Bhai');
+    expect(g['/ravi0']!.label, 'Ravi Kumar · WhatsApp');
+    expect(g['/ravi0']!.evidence['Chat with'], 'Ravi Kumar');
     expect(g['/once']!.label, 'Other WhatsApp chats');
   });
 
   test('a cut-off header and an unrecognised app join the same person', () {
     final shots = {
-      '/a': (_wa, '10:12\nDev Sharma\nhi'),
-      '/b': (_wa, '10:13\nDev Sharma\nhi'),
-      '/c': (_wa, '10:14\nDev Shar\nhi'),
-      '/d': (_unknown, '10:15\nDev Sharma\nhi'),
+      '/a': (_wa, '10:12\nAditi Sharma\nhi'),
+      '/b': (_wa, '10:13\nAditi Sharma\nhi'),
+      '/c': (_wa, '10:14\nAditi Shar\nhi'),
+      '/d': (_unknown, '10:15\nAditi Sharma\nhi'),
     };
     final g = groupScreenshots(shots);
-    expect({for (final v in g.values) v.label}, {'Dev Sharma · WhatsApp'});
+    expect({for (final v in g.values) v.label}, {'Aditi Sharma · WhatsApp'});
   });
 
   group('what app or site a screen shows', () {
     test('a web address, not an email', () {
       expect(screenSource('leetcode.com/problems/two-sum'), 'LeetCode');
       expect(screenSource('in.pinterest.com/pin/123'), 'Pinterest');
-      expect(screenSource('portal.example-univ.ac.in/results'), 'portal.example-univ.ac.in');
+      expect(screenSource('portal.sample-college.ac.in/results'), 'portal.sample-college.ac.in');
       expect(screenSource('Write to me at someone@example.org'), isNull);
     });
     test('an installed app found in the text', () {

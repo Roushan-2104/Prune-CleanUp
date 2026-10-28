@@ -3,12 +3,16 @@ import 'dart:io';
 
 import 'package:phone_link/phone_link.dart';
 
+import 'media_view.dart' show markFromInternet;
+
 /// Copies of phone files made only so you can SEE them while reviewing.
 ///
 /// - Copied on demand (only what's on screen or what you open), read-only
 ///   on the phone.
 /// - Kept in a private folder, %LOCALAPPDATA%\Prune\previews, which is
 ///   emptied when Prune starts and when it closes.
+/// - Each copy is marked as downloaded from the internet the moment it
+///   exists, so Windows treats it with the same care as a browser download.
 class PreviewCache {
   PreviewCache(this.adb, this.serial);
 
@@ -46,6 +50,7 @@ class PreviewCache {
       await _slot();
       try {
         await adb.copyToLaptop(serial, f, local.path);
+        markFromInternet(local.path);
         return local;
       } catch (_) {
         return null;
@@ -54,6 +59,18 @@ class PreviewCache {
         unawaited(Future(() => _inFlight.remove(f.path)));
       }
     });
+  }
+
+  /// A second copy of [copy], alone in a new folder of its own, for
+  /// showing in Explorer: the folder then holds nothing else from the phone
+  /// for Explorer to draw (or follow) next to it. Lives under [root], so it
+  /// is deleted with the other previews.
+  static File aloneInFolder(File copy) {
+    final dir = copy.parent.createTempSync('shown_');
+    final name = copy.path.substring(copy.parent.path.length + 1);
+    final alone = copy.copySync('${dir.path}${Platform.pathSeparator}$name');
+    markFromInternet(alone.path);
+    return alone;
   }
 
   /// At most 3 copies at a time, so scrolling stays smooth.

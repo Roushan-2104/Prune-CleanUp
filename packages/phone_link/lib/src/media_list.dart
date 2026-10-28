@@ -92,6 +92,47 @@ List<PhoneFile> parseMediaRows(String output) {
   return [for (final f in files) if (paths[f.path] == 1 && ids[f.id] == 1) f];
 }
 
+/// Every path the media query printed in its `_data` column, including rows
+/// [parseMediaRows] turns down (a name ending in a space or holding a
+/// newline, a path listed twice…).
+///
+/// Such a file is still in Android's media list, so it must never be taken
+/// for a hidden one and deleted outright: it is left out of the clean-up
+/// altogether, since Prune can't be sure which row is really it.
+///
+/// Errs on the side of "listed": a path counts if it might have been printed.
+class MediaListedPaths {
+  MediaListedPaths(String output) : _output = output {
+    for (final line in output.split('\n')) {
+      // `_data` is the last column, so its value runs to the end of the line.
+      // A name can itself contain ", _data=", so every place counts.
+      for (var i = line.indexOf(_key); i >= 0; i = line.indexOf(_key, i + 1)) {
+        final value = line.substring(i + _key.length);
+        _paths
+          ..add(value)
+          ..add(value.endsWith('\r') ? value.substring(0, value.length - 1) : value);
+      }
+    }
+  }
+
+  static const _key = ', _data=';
+  final String _output;
+  final _paths = <String>{};
+
+  /// Whether the media query may have printed [path].
+  bool contains(String path) {
+    if (_paths.contains(path)) return true;
+    // A path with a line break was printed across lines: look for it whole.
+    if (path.contains('\n') || path.contains('\r')) {
+      for (var i = _output.indexOf('$_key$path'); i >= 0; i = _output.indexOf('$_key$path', i + 1)) {
+        final end = i + _key.length + path.length;
+        if (end == _output.length || _output[end] == '\n' || _output[end] == '\r') return true;
+      }
+    }
+    return false;
+  }
+}
+
 Map<String, String?>? _parseRow(String line) {
   final start = RegExp(r'^Row: \d+ ').firstMatch(line);
   if (start == null) return null;

@@ -164,6 +164,9 @@ class _Overview extends StatelessWidget {
     }
     final sum = session.summary!;
     final hidden = sum.hidden;
+    // Only this phone's own clean-ups: the store is asked by its serial.
+    final serial = session.serial;
+    final undo = serial == null ? null : UndoableCleanUp.of(session.store, serial);
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(40, 36, 40, 40),
       child: Center(
@@ -249,6 +252,10 @@ class _Overview extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 36),
+              if (undo != null) ...[
+                _UndoLast(session: session, undo: undo),
+                const SizedBox(height: 10),
+              ],
               _SinceLastTime(session: session),
               const SizedBox(height: 6),
               Text(
@@ -416,6 +423,30 @@ class _PhotoProgress extends StatelessWidget {
   }
 
   static String _minutes(Duration d) => d.inMinutes < 1 ? 'under a minute' : '${d.inMinutes} min';
+}
+
+/// "Undo last clean-up": shown while this phone's last clean-up still has
+/// items that can come back, so Undo outlives the clean-up dialog.
+class _UndoLast extends StatelessWidget {
+  const _UndoLast({required this.session, required this.undo});
+  final PhoneSession session;
+  final UndoableCleanUp undo;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      const Icon(Icons.undo, size: 16, color: Tone.muted),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(undoSummary(undo), style: const TextStyle(fontSize: 12, color: Tone.muted)),
+      ),
+      TextButton(
+        style: TextButton.styleFrom(foregroundColor: Tone.ink),
+        onPressed: () => showUndoDialog(context, session, undo),
+        child: const Text('Undo last clean-up…'),
+      ),
+    ],
+  );
 }
 
 /// "First time we've seen this phone" or "Since last time: 12 new, 3 gone".

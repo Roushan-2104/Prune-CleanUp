@@ -51,9 +51,17 @@ bool isInPhoneTrashOrPending(String fileName) =>
 
 /// Everything on the phone: MediaStore's richer entries (dimensions,
 /// durations, dates taken) plus the files only `find` sees.
-List<PhoneFile> mergeListings(List<PhoneFile> mediaList, List<PhoneFile> found) {
+///
+/// [printed] holds every path the media query printed, including rows it
+/// turned down. Those files are in Android's media list (so they have a
+/// Trash), yet have no row Prune can trust: they are left out rather than
+/// listed as hidden, because hidden files are deleted outright.
+List<PhoneFile> mergeListings(List<PhoneFile> mediaList, List<PhoneFile> found, {MediaListedPaths? printed}) {
   final known = {for (final f in mediaList) f.path};
-  return [...mediaList, ...found.where((f) => !known.contains(f.path))];
+  return [
+    ...mediaList,
+    ...found.where((f) => !known.contains(f.path) && !(printed?.contains(f.path) ?? false)),
+  ];
 }
 
 const _mimeByExtension = {

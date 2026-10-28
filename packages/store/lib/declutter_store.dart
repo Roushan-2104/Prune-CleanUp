@@ -417,6 +417,10 @@ class Store {
           CleanOp._(r),
       ];
 
+  /// The phone a clean-up was made on, or null for an unknown session.
+  String? phoneOf(int session) =>
+      _db.select('SELECT phone FROM sessions WHERE id = ?', [session]).firstOrNull?['phone'] as String?;
+
   /// The most recent finished clean-up of a phone, for "Undo".
   int? lastSession(String phone) =>
       _db.select('SELECT id FROM sessions WHERE phone = ? AND finished IS NOT NULL ORDER BY id DESC LIMIT 1', [phone])
