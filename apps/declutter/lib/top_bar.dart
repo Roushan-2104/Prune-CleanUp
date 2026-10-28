@@ -21,8 +21,8 @@ class TopBar extends StatelessWidget {
       height: 68,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       decoration: const BoxDecoration(
-        color: Tone.paper,
-        border: Border(bottom: BorderSide(color: Tone.rule, width: 2)),
+        color: Tone.desk,
+        border: Border(bottom: BorderSide(color: Tone.line)),
       ),
       child: Row(
         children: [
@@ -81,13 +81,13 @@ class _ReadOnly extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const Tooltip(
-    message: 'Prune only reads your phone. Nothing changes until you approve a clean-up.',
+    message: 'Prune only reads your phone. Nothing changes until you press Clean and confirm.',
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(Icons.lock_outline, size: 14, color: Tone.muted),
         SizedBox(width: 4),
-        Text('Read-only', style: TextStyle(fontSize: 12, color: Tone.muted)),
+        Text('Reads only, until you clean', style: TextStyle(fontSize: 12, color: Tone.muted)),
       ],
     ),
   );

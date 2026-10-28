@@ -408,7 +408,7 @@ class _PhotoProgress extends StatelessWidget {
               ? Icons.check_circle_outline
               : Icons.pause_circle_outline,
           size: 18,
-          color: scan.error != null ? Tone.rule : Tone.muted,
+          color: scan.error != null ? Tone.danger : Tone.muted,
         ),
         const SizedBox(width: 8),
         Expanded(
