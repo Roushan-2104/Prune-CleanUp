@@ -1,6 +1,8 @@
 #include "win32_window.h"
 
 #include <dwmapi.h>
+
+#include <algorithm>
 #include <flutter_windows.h>
 
 #include "resource.h"
@@ -128,16 +130,25 @@ bool Win32Window::Create(const std::wstring& title,
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
 
-  const POINT target_point = {static_cast<LONG>(origin.x),
-                              static_cast<LONG>(origin.y)};
-  HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
+  // Open centred on the screen the mouse is on (where the user is looking),
+  // never pinned to a corner, and never bigger than that screen's free area.
+  POINT cursor{};
+  ::GetCursorPos(&cursor);
+  HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
+  MONITORINFO info{sizeof(MONITORINFO)};
+  ::GetMonitorInfo(monitor, &info);
+  const RECT& work = info.rcWork;
+  const int work_width = work.right - work.left;
+  const int work_height = work.bottom - work.top;
+  const int width = (std::min)(Scale(size.width, scale_factor), work_width * 9 / 10);
+  const int height = (std::min)(Scale(size.height, scale_factor), work_height * 9 / 10);
+  const int x = work.left + (work_width - width) / 2;
+  const int y = work.top + (work_height - height) / 2;
 
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
-      Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
-      Scale(size.width, scale_factor), Scale(size.height, scale_factor),
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW, x, y, width, height,
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {

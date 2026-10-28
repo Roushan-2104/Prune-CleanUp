@@ -1,7 +1,7 @@
 name: declutter
-description: "A new Flutter project."
+description: "Prune: frees space on an Android phone from a Windows laptop, safely."
 publish_to: 'none'
-version: 0.1.0+1
+version: 1.0.0
 
 environment:
   sdk: ^3.13.5

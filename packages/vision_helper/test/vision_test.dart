@@ -99,6 +99,57 @@ void main() {
     expect(r[1].gray, isNotNull);
   });
 
+  test('kept-alive helpers: many calls, results in order, bad files alone, close', () async {
+    final kept = Vision(exe, parallel: 3, batchSize: 2, keepAlive: true);
+    addTearDown(kept.close);
+    final paths = [for (var i = 0; i < 11; i++) await drawText('k$i', ['Number $i'])];
+    for (var round = 0; round < 3; round++) {
+      final results = await kept.analyse([...paths, '${dir.path}${Platform.pathSeparator}nope.jpg']);
+      for (var i = 0; i < paths.length; i++) {
+        expect(results[i].path, paths[i]);
+        expect(results[i].text!.toLowerCase(), contains('number $i'));
+      }
+      expect(results.last.ok, isFalse);
+    }
+    // Calls at the same time share the helpers.
+    final both = await Future.wait([kept.analyse(paths), kept.analyse(paths.reversed.toList(), text: false, gray: true)]);
+    expect(both[0].first.text!.toLowerCase(), contains('number 0'));
+    expect(both[1].first.gray, isNotNull);
+    await kept.close();
+    await expectLater(kept.analyse(paths), throwsA(isA<VisionError>()));
+  });
+
+  test('one decode for several sizes: same pixels and text as separate decodes, in every orientation', () async {
+    // A big photo-like JPEG with text, saved with each EXIF orientation.
+    final base = img.Image(width: 3000, height: 2000);
+    for (var y = 0; y < base.height; y++) {
+      for (var x = 0; x < base.width; x++) {
+        base.setPixelRgb(x, y, (x * 7 + y) % 256, (y * 3) % 256, (x ^ y) % 256);
+      }
+    }
+    img.fillRect(base, x1: 300, y1: 300, x2: 2700, y2: 1100, color: img.ColorRgb8(255, 255, 255));
+    img.drawString(base, 'Payment received', font: img.arial48, x: 400, y: 400, color: img.ColorRgb8(0, 0, 0));
+    img.drawString(base, 'Order shipped today', font: img.arial48, x: 400, y: 700, color: img.ColorRgb8(0, 0, 0));
+    final paths = <String>[];
+    for (var o = 1; o <= 8; o++) {
+      final copy = img.Image.from(base)..exif.imageIfd.orientation = o;
+      final path = '${dir.path}${Platform.pathSeparator}turned$o.jpg';
+      await File(path).writeAsBytes(img.encodeJpg(copy, quality: 90));
+      paths.add(path);
+    }
+    final together = await vision.analyseEach([for (final p in paths) VisionJob(p, gray: true, text: true, textMaxSide: 1600)]);
+    final gray = await vision.analyseEach([for (final p in paths) VisionJob(p, gray: true)]);
+    final text = await vision.analyseEach([for (final p in paths) VisionJob(p, text: true, textMaxSide: 1600)]);
+    for (var i = 0; i < paths.length; i++) {
+      final a = together[i].gray!, b = gray[i].gray!;
+      expect((a.width, a.height), (b.width, b.height), reason: 'orientation ${i + 1}');
+      expect(a.pixels, b.pixels, reason: 'orientation ${i + 1}');
+      expect(together[i].text, text[i].text, reason: 'orientation ${i + 1}');
+    }
+    expect(gray[0].gray!.width, greaterThan(gray[0].gray!.height), reason: 'upright: landscape');
+    expect(gray[5].gray!.width, lessThan(gray[5].gray!.height), reason: 'orientation 6: turned to portrait');
+  });
+
   test('file names with spaces and unicode work', () async {
     final path = await drawText('my photo ₹ नमस्ते', ['Hello world']);
     expect((await vision.readText(path)).text!.toLowerCase(), contains('hello'));

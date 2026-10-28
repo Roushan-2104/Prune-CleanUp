@@ -112,6 +112,10 @@ class _Index {
 }
 
 class _ReviewPageState extends State<ReviewPage> {
+  /// The phone this page was opened for. Ticks belong to it alone: if a
+  /// different phone is read meanwhile, the page closes (see [_onSession]).
+  late final String? _serial = widget.session.serial;
+
   late final Selection selection = Selection(widget.session.suggestions);
   late final ReviewMedia? media = widget.session.serial == null
       ? null
@@ -241,11 +245,38 @@ class _ReviewPageState extends State<ReviewPage> {
     super.dispose();
   }
 
-  void _onSession() {
-    if (mounted) setState(() {});
+  /// Whether the session now shows a different phone than the one this
+  /// page was opened for. (While a phone is being re-read, `serial` is
+  /// briefly empty; that alone isn't a switch.)
+  bool get _otherPhone {
+    final now = widget.session.serial;
+    return now != null && now != _serial;
   }
 
-  void _clean() => widget.onClean?.call([for (final p in selection.picked) ?byPath[p]]);
+  var _closing = false;
+
+  void _onSession() {
+    if (!mounted) return;
+    if (_otherPhone && !_closing) {
+      // Ticks made for one phone must never be cleaned on another, even
+      // where both phones have a file at the same path.
+      _closing = true;
+      selection.setAll(selection.picked.toList(), false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final route = ModalRoute.of(context);
+        // Removes only this page, never a dialog open above it.
+        if (route != null && route.isActive) Navigator.of(context).removeRoute(route);
+      });
+    }
+    setState(() {});
+  }
+
+  void _clean() {
+    // Only for the phone the ticks were made on, and only once it's ready.
+    if (_closing || widget.session.serial != _serial || widget.session.state != LinkState.ready) return;
+    widget.onClean?.call([for (final p in selection.picked) ?byPath[p]]);
+  }
 
   @override
   Widget build(BuildContext context) {

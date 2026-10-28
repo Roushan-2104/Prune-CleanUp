@@ -290,7 +290,7 @@ class _Results extends StatelessWidget {
                 total == 0
                     ? 'Answer a few picks to see how often Prune is right.'
                     : '$right of $total sure picks you checked were ones you would remove. '
-                        'Groups below 95% shouldn\'t be pre-ticked yet — tell us which.',
+                        'Where a group scores lower, untick it in Review and check those items one by one.',
                 style: const TextStyle(color: Tone.muted, height: 1.5),
               ),
               const SizedBox(height: 22),

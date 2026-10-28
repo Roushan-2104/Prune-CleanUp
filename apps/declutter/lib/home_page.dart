@@ -79,8 +79,11 @@ class HomePage extends StatelessWidget {
                   action: TextButton(onPressed: session.rescan, child: const Text('Read it again')),
                 ),
                 LinkState.error => _Guide(
-                    title: 'Something went wrong',
-                    steps: [session.error ?? 'Unknown error', 'Unplug and reconnect the phone to try again.'],
+                    title: 'Prune couldn\'t read this phone',
+                    steps: [
+                      session.error ?? 'Unplug the phone, plug it back in, and try again.',
+                      'Prune tries again by itself every few seconds.',
+                    ],
                   ),
                   LinkState.ready when pick != null => _Overview(session: session, pick: pick),
                   LinkState.ready => const _Guide(title: 'Reading your phone…', steps: [], waiting: true),

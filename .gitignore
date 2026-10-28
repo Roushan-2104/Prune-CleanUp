@@ -87,7 +87,7 @@ packages/vision_helper/obj/
 node_modules/
 video/out/
 
-# The beta ZIP and installer (rebuild with tool/package.ps1)
+# The release ZIP and installer (rebuild with tool/package.ps1)
 /dist/
 /Output/
 

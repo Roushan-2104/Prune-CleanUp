@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:declutter_store/declutter_store.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'friendly_error.dart';
+
 /// What a clean-up will do, shown to the user before anything happens.
 class CleanPlan {
   CleanPlan(List<PhoneFile> items)
@@ -20,11 +22,15 @@ class CleanPlan {
 }
 
 class CleanResult {
-  CleanResult(this.session, this.done, this.failed, this.bytesFreed);
+  CleanResult(this.session, this.done, this.failed, this.bytesFreed, {this.stoppedBy});
   final int session;
   final int done;
   final Map<String, String> failed; // path → why
   final int bytesFreed;
+
+  /// Why the clean-up stopped before the end (a pulled cable), or null if
+  /// it ran to the end. What was already done can still be undone.
+  final Object? stoppedBy;
 }
 
 /// %USERPROFILE%\Prune Backups
@@ -66,15 +72,26 @@ Map<String, String> backupPathsFor(String phoneLabel, List<PhoneFile> files, {Da
 /// Every step is written to the journal before it happens, so if the app
 /// or cable stops midway, the next connection knows exactly what was done.
 class CleanRunner {
-  CleanRunner({required this.store, required this.adb, required this.serial, required this.phoneLabel});
+  CleanRunner({
+    required this.store,
+    required this.adb,
+    required this.serial,
+    required this.phoneLabel,
+    this.allowRealPhone = false,
+  });
 
   final Store store;
   final Adb adb;
   final String serial;
   final String phoneLabel;
 
-  /// Throws [RealPhoneLocked] for real phones in this build.
-  late final PhoneCleaner cleaner = PhoneCleaner(adb.adbPath, serial);
+  /// Whether a real (non-virtual) phone may be changed. Only the clean-up
+  /// dialog sets it, for a clean-up the user confirmed. Off by default, so
+  /// tests and any other caller can only ever change a virtual phone.
+  final bool allowRealPhone;
+
+  /// Throws [RealPhoneLocked] for a real phone unless [allowRealPhone].
+  late final PhoneCleaner cleaner = PhoneCleaner(adb.adbPath, serial, allowRealPhone: allowRealPhone);
 
   Future<CleanResult> run(CleanPlan plan, {required bool backup, void Function(String step, double progress)? onProgress}) async {
     await cleaner.confirmVirtualPhone(); // fail fast on the safety lock, before any copying
@@ -95,12 +112,26 @@ class CleanRunner {
     // ones that were actually backed up are deleted.
     final deletable = backup ? plan.toDelete.where((f) => backups.containsKey(f.path)).toList() : plan.toDelete;
     final skipped = {
-      for (final f in plan.toDelete.where((f) => !deletable.contains(f))) f.path: 'Not deleted: backup failed',
+      for (final f in plan.toDelete.where((f) => !deletable.contains(f))) f.path: 'Not deleted, because its backup to this laptop didn\'t finish.',
     };
 
     final session = store.startSession(serial);
+    _running.add(session);
+    try {
+      return await _clean(plan.toTrash, deletable, session, backups, skipped, onProgress);
+    } finally {
+      _running.remove(session);
+    }
+  }
+
+  /// Clean-ups running right now, which [settleUnfinished] leaves alone.
+  static final _running = <int>{};
+
+  Future<CleanResult> _clean(List<PhoneFile> toTrash, List<PhoneFile> deletable, int session,
+      Map<String, String> backups, Map<String, String> skipped,
+      void Function(String step, double progress)? onProgress) async {
     final work = [
-      for (final f in plan.toTrash) (f, CleanMethod.trash),
+      for (final f in toTrash) (f, CleanMethod.trash),
       for (final f in deletable) (f, CleanMethod.delete),
     ];
     final ids = store.planCleanOps(session, serial, [
@@ -108,6 +139,7 @@ class CleanRunner {
     ]);
 
     var done = 0, freed = 0;
+    Object? stoppedBy;
     final failed = <String, String>{...skipped};
     for (final (i, (f, method)) in work.indexed) {
       onProgress?.call('Cleaning… ${i + 1} of ${work.length}', 0.5 + 0.5 * (i + 1) / work.length);
@@ -116,15 +148,58 @@ class CleanRunner {
         store.markOp(ids[i], OpState.done);
         done++;
         freed += f.bytes;
-      } on PhoneDisconnected {
-        rethrow; // the rest stay 'planned' in the journal and are checked next time
+      } on PhoneDisconnected catch (e) {
+        // The rest stay 'planned' in the journal and are settled when the
+        // phone is next read (see [settleUnfinished]). What was done so far
+        // is recorded below, so it can still be undone.
+        stoppedBy = e;
+        break;
       } catch (e) {
-        store.markOp(ids[i], OpState.failed, error: '$e');
-        failed[f.path] = '$e';
+        store.markOp(ids[i], OpState.failed, error: '$e'); // full detail, kept on this laptop
+        failed[f.path] = friendlyError(e);
       }
     }
     store.finishSession(session, itemsRemoved: done, bytesFreed: freed);
-    return CleanResult(session, done, failed, freed);
+    return CleanResult(session, done, failed, freed, stoppedBy: stoppedBy);
+  }
+
+  /// Settles what an interrupted clean-up (pulled cable, closed app) left
+  /// 'planned' in the journal: a file no longer at its path was removed
+  /// (trashed files are renamed by Android), one still there was left in
+  /// place. Only reads the phone. Returns how many were settled.
+  static Future<int> settleUnfinished(Store store, Adb adb, String serial) async {
+    final sessions = <int>{};
+    var settled = 0;
+    for (final op in store.unfinishedOps(serial)) {
+      if (_running.contains(op.session)) continue;
+      bool there;
+      try {
+        // A file that is there answers with its size. Anything else (an
+        // error some phones print as ordinary output) is asked again later.
+        final out = await adb.shell(serial, 'stat -c %s ${shellQuote(op.path)}');
+        if (!RegExp(r'^\d+$').hasMatch(out.trim())) continue;
+        there = true;
+      } on PhoneDisconnected {
+        rethrow;
+      } on ProcessException catch (e) {
+        // Only a clear "no such file" counts as gone; anything else is
+        // left 'planned' and asked again next time.
+        if (!e.message.toLowerCase().contains('no such file')) continue;
+        there = false;
+      }
+      store.markOp(op.id, there ? OpState.failed : OpState.done,
+          error: there ? 'left in place: the clean-up was interrupted' : null);
+      sessions.add(op.session);
+      settled++;
+    }
+    // Recount each touched clean-up, so space freed and Undo include them.
+    for (final s in sessions) {
+      // Counted as when a clean-up ends: an undo later doesn't change these.
+      final removed = store.opsOf(s).where((o) => o.state == OpState.done || o.state == OpState.restored).toList();
+      store.finishSession(s,
+          itemsRemoved: removed.length, bytesFreed: removed.fold(0, (sum, o) => sum + o.bytes));
+    }
+    return settled;
   }
 
   /// Undoes a clean-up: takes files out of the phone's Trash, and copies

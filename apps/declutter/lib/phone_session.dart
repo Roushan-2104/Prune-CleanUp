@@ -6,6 +6,8 @@ import 'package:declutter_store/declutter_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'cleaning.dart';
+import 'friendly_error.dart';
 import 'photo_scan.dart';
 
 enum LinkState { noAdb, waiting, unauthorized, reading, ready, forgotten, error }
@@ -151,7 +153,7 @@ class PhoneSession extends ChangeNotifier {
     } on PhoneDisconnected {
       _set(LinkState.waiting, clear: true);
     } catch (e) {
-      error = '$e';
+      error = friendlyError(e);
       _set(LinkState.error);
     } finally {
       _busy = false;
@@ -163,6 +165,14 @@ class PhoneSession extends ChangeNotifier {
     _set(LinkState.reading);
     info = await _adb!.info(s);
     notifyListeners();
+    // A clean-up cut short last time (cable pulled, app closed): find out
+    // which of its steps happened, so Undo and the totals include them.
+    try {
+      await CleanRunner.settleUnfinished(store, _adb!, s);
+    } catch (_) {
+      // Only reads; tried again on the next connection. A real disconnect
+      // shows up in the listing below.
+    }
     _step('Listing every file, including ones Android hides…');
     final sw = Stopwatch()..start();
     final files = await _adb!.listAllFiles(s);

@@ -1,9 +1,9 @@
-; Prune beta installer, built by tool\package.ps1 with Inno Setup 6.
+; Prune installer, built by tool\package.ps1 with Inno Setup 6.
 ; Installs for the current Windows user only: no administrator prompt.
 ; Pass /DAppVersion=x.y.z and /DRelease=<Flutter Release folder>.
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0"
+  #define AppVersion "1.0.0"
 #endif
 #ifndef Release
   #define Release "..\apps\declutter\build\windows\x64\runner\Release"
@@ -14,8 +14,9 @@
 AppId={{6B3F2E7A-4C1D-4E8B-9A57-2D0C8F1E3B94}
 AppName=Prune
 AppVersion={#AppVersion}
-AppVerName=Prune {#AppVersion} beta
+AppVerName=Prune {#AppVersion}
 AppPublisher=Prune
+VersionInfoVersion={#AppVersion}
 DefaultDirName={autopf}\Prune
 DefaultGroupName=Prune
 DisableProgramGroupPage=yes
@@ -24,7 +25,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 OutputDir=..\dist
-OutputBaseFilename=Prune-beta-Setup
+OutputBaseFilename=Prune-{#AppVersion}-Setup
 UninstallDisplayIcon={app}\Prune.exe
 SetupIconFile=..\apps\declutter\windows\runner\resources\app_icon.ico
 Compression=lzma2/max
@@ -37,7 +38,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "{#Release}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\docs\BETA_GUIDE.md"; DestDir: "{app}"; DestName: "Read me first.txt"; Flags: ignoreversion isreadme
+Source: "..\docs\USER_GUIDE.md"; DestDir: "{app}"; DestName: "Read me first.txt"; Flags: ignoreversion isreadme
 
 [Icons]
 Name: "{autoprograms}\Prune"; Filename: "{app}\Prune.exe"

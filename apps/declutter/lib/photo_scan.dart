@@ -8,6 +8,7 @@ import 'package:phone_link/phone_link.dart';
 import 'package:vision_helper/vision_helper.dart';
 
 import 'dev_log.dart';
+import 'friendly_error.dart';
 
 /// Checks photos and screenshots on the laptop, read-only on the phone:
 /// copy a batch → read text (screenshots) and a small grayscale copy
@@ -106,7 +107,7 @@ class PhotoScan extends ChangeNotifier {
     _files = files;
     final exe = findVisionHelper();
     if (exe == null) {
-      error = 'The text-reading helper (PruneVision.exe) is missing.';
+      error = 'Photo checking is unavailable because part of Prune is missing. Reinstalling Prune fixes this.';
       notifyListeners();
       return;
     }
@@ -129,30 +130,45 @@ class PhotoScan extends ChangeNotifier {
     // A Wi-Fi serial is "ip:port", and ':' in a folder name is an alternate data stream.
     final work = Directory(inside(workRoot.path, ['$serial-${DateTime.now().millisecondsSinceEpoch}']));
     // Text reading is CPU-bound: 8 helpers measured fastest on a 12-thread
-    // laptop. Small lists (a helper starts in ~70 ms) keep every helper busy
-    // to the end of a batch, instead of a few finishing long lists alone.
-    final vision = Vision(exe, parallel: (Platform.numberOfProcessors - 4).clamp(2, 8), batchSize: 5);
+    // laptop. They stay running for the whole check (starting one and
+    // loading its text reader cost ~95 ms, every 5 images before), so tiny
+    // lists are cheap and keep every helper busy to the end of a batch.
+    final vision = Vision(exe, parallel: (Platform.numberOfProcessors - 4).clamp(2, 8), batchSize: 2, keepAlive: true);
     final batches = [for (var i = 0; i < todo.length; i += batchSize) todo.sublist(i, (i + batchSize).clamp(0, todo.length))];
-    // The next batch copies over USB while this one is being read.
+    // The next batch copies over USB while this one is being read, and a
+    // batch's face check and saving run while the next one is read.
     Future<List<PhoneFile>>? next;
+    Future<void> finishing = Future.value();
+    Object? finishError; // kept here so it can't go unhandled while we wait on other work
     try {
       if (batches.isNotEmpty) next = _copy(batches.first, work);
       for (var i = 0; i < batches.length && !_stop; i++) {
         final t = _clock.elapsedMilliseconds;
         final copied = await next!;
         next = i + 1 < batches.length && !_stop ? _copy(batches[i + 1], work) : null;
-        await _measure(copied, images, work, vision);
-        done += batches[i].length;
-        devLog('photo check: $done of $total, ${batches[i].length} in ${_clock.elapsedMilliseconds - t} ms '
-            '(copy $_copyMs, read $_readMs, faces $_faceMs)');
-        step = '';
-        notifyListeners();
+        final measured = await _read(copied, images, work, vision);
+        await finishing;
+        if (finishError case final e?) throw e;
+        final count = batches[i].length;
+        finishing = _finish(measured, work, vision).then((_) {
+          done += count;
+          devLog('photo check: $done of $total, $count in ${_clock.elapsedMilliseconds - t} ms '
+              '(copy $_copyMs, read ${measured.readMs}, faces $_faceMs)');
+          notifyListeners();
+        }).catchError((Object e) {
+          finishError ??= e;
+        });
       }
+      await finishing;
+      if (finishError case final e?) throw e;
     } catch (e) {
-      error = e is PhoneDisconnected ? 'The phone was disconnected. Checked photos are saved.' : '$e';
+      error = e is PhoneDisconnected ? 'The phone was disconnected. Checked photos are saved.' : friendlyError(e);
     } finally {
+      await finishing; // never errors: see catchError above
       await next?.then((_) {}, onError: (_) {}); // never delete under a copy in progress
+      await vision.close();
       if (work.existsSync()) work.deleteSync(recursive: true);
+      step = '';
       running = false;
       _pending = null; // recounted on next ask
       _clock.stop();
@@ -172,7 +188,9 @@ class PhotoScan extends ChangeNotifier {
     return copied;
   }
 
-  Future<void> _measure(List<PhoneFile> copied, Map<String, ImageFacts> images, Directory work, Vision vision) async {
+  /// Reads text and a small grayscale copy of every copied photo, and works
+  /// out the measurements. [_finish] then checks faces and saves.
+  Future<_Measured> _read(List<PhoneFile> copied, Map<String, ImageFacts> images, Directory work, Vision vision) async {
     String local(PhoneFile f) => _local(work, f);
     step = 'Reading text and sharpness of ${copied.length} photos…';
     notifyListeners();
@@ -182,7 +200,6 @@ class PhotoScan extends ChangeNotifier {
         VisionJob(local(f), gray: true, text: mightBeScreenshot(images[f.path]!), textMaxSide: textMaxSide),
     ]);
     _readMs = sw.elapsedMilliseconds;
-    _faceMs = 0;
 
     final analyses = <String, Analysis>{};
     final faceCheck = <PhoneFile>[];
@@ -215,12 +232,18 @@ class PhotoScan extends ChangeNotifier {
       analyses[f.path] = a;
       if (!screenshot && classifyBlurMetrics(sharpness: a.sharpness!, entropy: a.entropy!) != null) faceCheck.add(f);
     }
+    return (copied: copied, analyses: analyses, faceCheck: faceCheck, readMs: _readMs);
+  }
 
+  /// Checks faces where needed, saves the measurements and deletes the
+  /// copies. Runs while the next batch is read, so it doesn't change [step].
+  Future<void> _finish(_Measured m, Directory work, Vision vision) async {
+    String local(PhoneFile f) => _local(work, f);
+    final (:copied, :analyses, :faceCheck, readMs: _) = m;
+    _faceMs = 0;
     // People in a blurry photo? Then it's never pre-ticked.
     if (faceCheck.isNotEmpty) {
-      step = 'Checking ${faceCheck.length} blurry-looking photos for people…';
-      notifyListeners();
-      sw.reset();
+      final sw = Stopwatch()..start();
       final faces = await vision.analyseEach([for (final f in faceCheck) VisionJob(local(f), faces: true)]);
       _faceMs = sw.elapsedMilliseconds;
       for (final (i, f) in faceCheck.indexed) {
@@ -269,3 +292,6 @@ class PhotoScan extends ChangeNotifier {
     return null;
   }
 }
+
+/// One batch, read and measured, waiting for its face check and saving.
+typedef _Measured = ({List<PhoneFile> copied, Map<String, Analysis> analyses, List<PhoneFile> faceCheck, int readMs});

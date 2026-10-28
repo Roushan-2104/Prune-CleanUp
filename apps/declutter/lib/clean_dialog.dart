@@ -1,7 +1,9 @@
+import 'package:declutter_store/declutter_store.dart' show OpState;
 import 'package:flutter/material.dart';
 import 'package:phone_link/phone_link.dart';
 
 import 'cleaning.dart';
+import 'friendly_error.dart';
 import 'phone_session.dart';
 
 /// Confirm → progress → summary (with Undo). Nothing changes on the phone
@@ -38,16 +40,18 @@ class _CleanDialogState extends State<_CleanDialog> {
   // The phone this dialog was opened for — fixed, even if the app re-reads
   // or switches phones meanwhile.
   late final String? serial = widget.session.serial;
-  late final bool isVirtual = serial != null && PhoneCleaner.isVirtualPhone(serial!);
 
+  // Real phones are allowed here, and only here: this runner acts only
+  // after the user presses Clean below. Everything else stays read-only.
   late final runner = CleanRunner(
     store: widget.session.store,
     adb: widget.session.adb,
     serial: serial!,
     phoneLabel: '${widget.session.info?.model ?? 'phone'}-$serial',
+    allowRealPhone: true,
   );
 
-  bool get canStart => isVirtual && (backup || widget.plan.toDelete.isEmpty || understood);
+  bool get canStart => serial != null && (backup || widget.plan.toDelete.isEmpty || understood);
 
   Future<void> _run() async {
     setState(() => stage = _Stage.running);
@@ -57,21 +61,41 @@ class _CleanDialogState extends State<_CleanDialog> {
                 step = s;
                 progress = p;
               }));
+      // Cut off midway (cable pulled): what was done is recorded and can
+      // still be undone once the phone is back.
+      if (result!.stoppedBy case final e?) error = friendlyError(e);
     } catch (e) {
-      error = '$e';
+      error = friendlyError(e);
     }
     setState(() => stage = _Stage.done);
     widget.session.rescan();
   }
 
   Future<void> _undo() async {
-    setState(() => stage = _Stage.undoing);
+    setState(() {
+      stage = _Stage.undoing;
+      error = null;
+    });
+    // Counted from the journal, so items put back before a pulled cable
+    // still count when Undo is pressed again.
+    int putBack() => widget.session.store.opsOf(result!.session).where((o) => o.state == OpState.restored).length;
     try {
-      restored = await runner.undo(result!.session, onProgress: (s) => setState(() => step = s));
+      await runner.undo(result!.session, onProgress: (s) => setState(() => step = s));
+    } on PhoneDisconnected catch (e) {
+      // Nothing is lost: plug the phone back in and press Undo again.
+      setState(() {
+        restored = putBack();
+        error = friendlyError(e);
+        stage = _Stage.done;
+      });
+      return;
     } catch (e) {
-      error = '$e';
+      error = friendlyError(e);
     }
-    setState(() => stage = _Stage.undone);
+    setState(() {
+      restored = putBack();
+      stage = _Stage.undone;
+    });
     widget.session.rescan();
   }
 
@@ -90,14 +114,6 @@ class _CleanDialogState extends State<_CleanDialog> {
         width: 520,
         child: switch (stage) {
           _Stage.confirm => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (!isVirtual)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(color: c.errorContainer, borderRadius: BorderRadius.circular(10)),
-                  child: Text('Cleaning real phones is switched off in this test build. Nothing will be changed.',
-                      style: TextStyle(color: c.onErrorContainer)),
-                ),
               if (p.toTrash.isNotEmpty)
                 _Line(Icons.delete_outline, '${p.toTrash.length} items go to the phone\'s Trash',
                     'You can restore them on the phone for 30 days, or with Undo here.'),
@@ -121,13 +137,15 @@ class _CleanDialogState extends State<_CleanDialog> {
                         style: TextStyle(color: c.error)),
                   ),
               ],
+              const SizedBox(height: 8),
+              Text('Nothing on the phone changes until you press Clean.', style: t.bodySmall),
             ]),
           _Stage.running || _Stage.undoing => Column(mainAxisSize: MainAxisSize.min, children: [
               LinearProgressIndicator(value: stage == _Stage.running ? progress : null),
               const SizedBox(height: 12),
               Text(step),
               const SizedBox(height: 8),
-              Text('Every step is recorded, so stopping halfway is safe.', style: t.bodySmall),
+              Text('Every step is recorded. If the cable comes out, Undo still works.', style: t.bodySmall),
             ]),
           _Stage.done => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (result != null) ...[
