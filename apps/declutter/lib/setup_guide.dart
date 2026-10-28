@@ -42,6 +42,13 @@ class _SetupGuideState extends State<SetupGuide> {
                 asking ? 'Allow this laptop on your phone' : 'Connect your Android phone',
                 style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.4),
               ),
+              if (!asking) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Your phone is hiding gigabytes. Prune finds them, and shows proof for every pick.',
+                  style: TextStyle(fontSize: 15, color: Tone.muted, height: 1.4),
+                ),
+              ],
               const SizedBox(height: 14),
               _Status(look: asking ? null : s.onUsb),
               const SizedBox(height: 22),

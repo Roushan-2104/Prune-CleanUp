@@ -170,10 +170,12 @@ class _Overview extends StatelessWidget {
               const SizedBox(height: 10),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
-                child: const Text(
-                  'Prune picked only what it is sure about, each with clear proof. Look through it group by '
-                  'group, untick anything you want to keep, then clean. Nothing changes on the phone until you do.',
-                  style: TextStyle(fontSize: 15, color: Tone.muted, height: 1.5),
+                child: Text(
+                  '${hidden.isEmpty ? '' : 'Prune also looked through the ${formatBytes(PhoneSummary.bytes(hidden))} '
+                          'your phone hides from its own file list. '}'
+                      'It picked only what it is sure about, each with clear proof. Look through it group by '
+                      'group, untick anything you want to keep, then clean. Nothing changes on the phone until you do.',
+                  style: const TextStyle(fontSize: 15, color: Tone.muted, height: 1.5),
                 ),
               ),
               const SizedBox(height: 24),
