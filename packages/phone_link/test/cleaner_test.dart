@@ -37,11 +37,16 @@ void main() {
     return Process.run(adbPath, ['-s', serial, 'shell', c]);
   }
 
-  /// The fake "Sent" file as Prune sees hidden files on a real phone:
-  /// no media id. (The virtual phone happens to list it, so drop the id.)
+  /// The fake "Sent" file as Prune sees hidden files on a real phone: no
+  /// media id, and size and date from the file system (`find`), not from
+  /// Android's media list. (The virtual phone happens to list it, and the
+  /// list's date can differ from the file's, which Prune would rightly
+  /// read as "changed".)
   Future<PhoneFile> hiddenSent() async {
     final f = (await adb.listAllFiles(emulator!)).singleWhere((x) => x.path == '$sent/sent.png');
-    return PhoneFile(path: f.path, folder: f.folder, bytes: f.bytes, mime: f.mime, modifiedSec: f.modifiedSec);
+    final stat = '${(await sh("stat -c '%s %Y' '$sent/sent.png'")).stdout}'.trim().split(RegExp(r'\s+'));
+    return PhoneFile(
+        path: f.path, folder: f.folder, bytes: int.parse(stat[0]), mime: f.mime, modifiedSec: int.parse(stat[1]));
   }
 
   Future<PhoneFile> listed(String name) async {
