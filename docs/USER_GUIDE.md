@@ -56,6 +56,12 @@ Prune shows these steps on screen too.
 4. Unlock the phone and tap **Allow** on the "Allow USB debugging?"
    message. Tick **Always allow from this computer** to skip this next time.
 
+Prune's setup screen has the exact menus for Samsung, Xiaomi, Pixel,
+OnePlus/OPPO/realme, Nothing, Motorola and vivo, and tells you what is
+missing: a cable that only charges, or USB debugging still off. On Samsung,
+**Auto Blocker** (Settings → Security and privacy) blocks USB debugging;
+turn it off while you use Prune.
+
 Prune then reads the phone. The first time takes a few minutes, because it
 checks every photo; later runs only check new ones. You can leave it
 running in the background.

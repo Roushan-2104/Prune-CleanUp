@@ -11,6 +11,7 @@ import 'phone_session.dart';
 import 'photo_scan.dart';
 import 'power.dart';
 import 'review_page.dart';
+import 'setup_guide.dart';
 import 'theme.dart';
 import 'top_bar.dart';
 
@@ -36,58 +37,45 @@ class HomePage extends StatelessWidget {
                 action: session.devices.where((d) => d.ready).length > 1 ? _PhonePicker(session: session) : null,
               ),
               Expanded(
-                child: switch (session.state) {
-                  LinkState.noAdb => const _Guide(
-                    title: 'Phone connection tool not found',
-                    steps: [
-                      'Prune needs Android\'s "adb" tool to talk to your phone.',
-                      'Install Android SDK Platform-Tools, then restart Prune.',
-                    ],
-                  ),
-                  LinkState.waiting => const _Guide(
-                    title: 'Plug in your Android phone',
-                    steps: [
-                      'On the phone: Settings → About phone → tap "Build number" 7 times.',
-                      'Settings → Developer options → turn on "USB debugging".',
-                      'Connect the phone to this laptop with a USB cable.',
-                    ],
-                    waiting: true,
-                  ),
-                  LinkState.unauthorized => const _Guide(
-                    title: 'Allow this laptop on your phone',
-                    steps: [
-                      'Unlock your phone.',
-                      'Tap "Allow" on the "Allow USB debugging?" message.',
-                      'Tick "Always allow from this computer" to skip this next time.',
-                    ],
-                    waiting: true,
-                  ),
-                  LinkState.reading => _Guide(
-                    title: 'Reading your phone…',
-                    steps: [
-                      if (session.readingStep.isNotEmpty) session.readingStep,
-                      'Nothing on the phone is changed.',
-                    ],
-                    waiting: true,
-                  ),
-                  LinkState.forgotten => _Guide(
-                  title: 'This phone is forgotten',
-                  steps: const [
-                    'Everything Prune saved about it on this laptop has been deleted.',
-                    'Unplug it, or read it again to start fresh.',
-                  ],
-                  action: TextButton(onPressed: session.rescan, child: const Text('Read it again')),
-                ),
-                LinkState.error => _Guide(
-                    title: 'Prune couldn\'t read this phone',
-                    steps: [
-                      session.error ?? 'Unplug the phone, plug it back in, and try again.',
-                      'Prune tries again by itself every few seconds.',
-                    ],
-                  ),
-                  LinkState.ready when pick != null => _Overview(session: session, pick: pick),
-                  LinkState.ready => const _Guide(title: 'Reading your phone…', steps: [], waiting: true),
-                },
+                // Development only: PRUNE_OPEN=setup shows the setup guide
+                // even with a phone connected, to check how it looks.
+                child: kDebugMode && Platform.environment['PRUNE_OPEN'] == 'setup'
+                    ? SetupGuide(session: session)
+                    : switch (session.state) {
+                        LinkState.noAdb => const _Guide(
+                          title: 'Phone connection tool not found',
+                          steps: [
+                            'Prune needs Android\'s "adb" tool to talk to your phone.',
+                            'Install Android SDK Platform-Tools, then restart Prune.',
+                          ],
+                        ),
+                        LinkState.waiting || LinkState.unauthorized => SetupGuide(session: session),
+                        LinkState.reading => _Guide(
+                          title: 'Reading your phone…',
+                          steps: [
+                            if (session.readingStep.isNotEmpty) session.readingStep,
+                            'Nothing on the phone is changed.',
+                          ],
+                          waiting: true,
+                        ),
+                        LinkState.forgotten => _Guide(
+                          title: 'This phone is forgotten',
+                          steps: const [
+                            'Everything Prune saved about it on this laptop has been deleted.',
+                            'Unplug it, or read it again to start fresh.',
+                          ],
+                          action: TextButton(onPressed: session.rescan, child: const Text('Read it again')),
+                        ),
+                        LinkState.error => _Guide(
+                          title: 'Prune couldn\'t read this phone',
+                          steps: [
+                            session.error ?? 'Unplug the phone, plug it back in, and try again.',
+                            'Prune tries again by itself every few seconds.',
+                          ],
+                        ),
+                        LinkState.ready when pick != null => _Overview(session: session, pick: pick),
+                        LinkState.ready => const _Guide(title: 'Reading your phone…', steps: [], waiting: true),
+                      },
               ),
             ],
           );
@@ -176,9 +164,7 @@ class _Overview extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                pick.sureBytes == 0
-                    ? 'Nothing Prune is sure about yet'
-                    : 'You can free ${formatBytes(pick.sureBytes)}',
+                pick.sureBytes == 0 ? 'Nothing Prune is sure about yet' : 'You can free ${formatBytes(pick.sureBytes)}',
                 style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.15),
               ),
               const SizedBox(height: 10),
@@ -252,10 +238,7 @@ class _Overview extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 36),
-              if (undo != null) ...[
-                _UndoLast(session: session, undo: undo),
-                const SizedBox(height: 10),
-              ],
+              if (undo != null) ...[_UndoLast(session: session, undo: undo), const SizedBox(height: 10)],
               _SinceLastTime(session: session),
               const SizedBox(height: 6),
               Text(
@@ -264,14 +247,18 @@ class _Overview extends StatelessWidget {
                 'Nothing on the phone was changed.',
                 style: const TextStyle(fontSize: 12, color: Tone.muted),
               ),
+              const SizedBox(height: 2),
+              const Text(
+                'When you\'re done, you can turn off USB debugging again: Settings → Developer options.',
+                style: TextStyle(fontSize: 12, color: Tone.muted),
+              ),
               const SizedBox(height: 4),
               Row(
                 children: [
                   TextButton(
                     style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => AccuracyPage(session: session)),
-                    ),
+                    onPressed: () =>
+                        Navigator.of(context).push(MaterialPageRoute(builder: (_) => AccuracyPage(session: session))),
                     child: const Text('Check Prune\'s accuracy…'),
                   ),
                   const SizedBox(width: 24),

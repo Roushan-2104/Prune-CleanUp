@@ -9,6 +9,7 @@ import 'package:phone_link/phone_link.dart';
 import 'cleaning.dart';
 import 'friendly_error.dart';
 import 'photo_scan.dart';
+import 'usb_presence.dart';
 
 enum LinkState { noAdb, waiting, unauthorized, reading, ready, forgotten, error }
 
@@ -303,12 +304,47 @@ class PhoneSession extends ChangeNotifier {
     }
     if (state == s && !clear) return;
     state = s;
+    _watchUsb(s == LinkState.waiting);
     notifyListeners();
+  }
+
+  /// While waiting for a phone: what Windows sees on USB, so the setup guide
+  /// can say whether the cable carries data and the phone is there.
+  UsbPresence onUsb = UsbPresence.unknown;
+  Timer? _usbTimer;
+  bool _usbLooking = false;
+
+  void _watchUsb(bool on) {
+    if (!on) {
+      _usbTimer?.cancel();
+      _usbTimer = null;
+      onUsb = UsbPresence.unknown;
+      return;
+    }
+    if (_usbTimer != null) return;
+    Future<void> look() async {
+      if (_usbLooking) return;
+      _usbLooking = true;
+      try {
+        final seen = await lookForPhoneOnUsb();
+        if (_usbTimer == null) return; // stopped meanwhile
+        if (seen.look != onUsb.look || seen.brand != onUsb.brand) {
+          onUsb = seen;
+          notifyListeners();
+        }
+      } finally {
+        _usbLooking = false;
+      }
+    }
+
+    _usbTimer = Timer.periodic(const Duration(seconds: 4), (_) => look());
+    look();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _usbTimer?.cancel();
     _stopPhotos();
     store.close();
     super.dispose();
