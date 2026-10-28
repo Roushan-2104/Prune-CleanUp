@@ -1,0 +1,31 @@
+name: Accuracy results
+description: Share your "Check Prune's accuracy" results, or tell us about a wrong pick.
+title: "Accuracy: "
+labels: ["accuracy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        In Prune, choose **Check Prune's accuracy…** on the home screen, answer a few picks, then press **Copy results**. It copies only percentages: no file names or pictures.
+
+        **Please don't attach screenshots of your photos, chats or payments**: this page is public.
+  - type: textarea
+    id: results
+    attributes:
+      label: Your results
+      description: Paste what "Copy results" copied.
+      placeholder: |
+        Prune accuracy check: 58 of 60 sure picks were right (97%).
+        Similar photos: 14 of 15 right (93%)
+      render: text
+  - type: textarea
+    id: wrong
+    attributes:
+      label: Anything Prune got wrong?
+      description: Which group, and what kind of item it was. Describe it in words.
+      placeholder: In Chat screenshots it picked a screenshot of a recipe from Instagram.
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version
+      placeholder: Pixel 8, Android 15

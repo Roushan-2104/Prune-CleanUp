@@ -88,7 +88,7 @@ Most cleaners show a bucket called "junk" and ask you to tap Delete. Prune shows
 
 ## Get Prune
 
-Download `Prune-1.0.0-Setup.exe` (installs for you only, no admin rights) or the portable `Prune-1.0.0.zip` from **Releases**, then follow the [user guide](docs/USER_GUIDE.md).
+Download `Prune-1.0.0-Setup.exe` (installs for you only, no admin rights) or the portable `Prune-1.0.0.zip` from **[the latest release](https://github.com/Roushan-2104/Prune-CleanUp/releases/latest)**, then follow the [user guide](docs/USER_GUIDE.md).
 
 Needs Windows 10 or 11 (64-bit), an Android phone and a USB cable that carries data. Windows may show "Windows protected your PC" the first time, because Prune isn't signed with a paid certificate yet: click **More info**, then **Run anyway**.
 
@@ -135,6 +135,10 @@ Tests tagged `phone` only read from a connected phone. Tests that clean run only
 ## Limits
 
 Android only: iPhones can't be read this way. Photos in Google Photos' cloud aren't checked, only what is on the phone. HEIC photos need Microsoft's HEIF/HEVC extensions.
+
+## Feedback
+
+Something went wrong, Prune picked something it shouldn't have, or you have an idea? **[Send feedback](https://github.com/Roushan-2104/Prune-CleanUp/issues/new/choose)**, or use **Send feedback…** in the app. Accuracy results from **Check Prune's accuracy…** help most. Please describe things in words rather than attaching screenshots of your photos or chats.
 
 <br>
 

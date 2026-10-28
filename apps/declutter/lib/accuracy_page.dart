@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phone_link/phone_link.dart';
 
+import 'feedback.dart';
 import 'media_view.dart';
 import 'phone_session.dart';
 import 'review_media.dart';
@@ -313,8 +314,19 @@ class _Results extends StatelessWidget {
                     label: const Text('Copy results'),
                   ),
                   const SizedBox(width: 12),
+                  TextButton(
+                    onPressed: total == 0
+                        ? null
+                        : () async {
+                            await Clipboard.setData(ClipboardData(text: summary));
+                            await openInBrowser(accuracyFeedbackUrl);
+                          },
+                    child: const Text('Share them…'),
+                  ),
+                  const SizedBox(width: 12),
                   const Flexible(
-                    child: Text('Only the percentages are copied: no file names or pictures.',
+                    child: Text('Only the percentages are copied: no file names or pictures. Share opens a public '
+                        'form in your browser with them ready to paste.',
                         style: TextStyle(fontSize: 12, color: Tone.muted)),
                   ),
                 ],

@@ -1,0 +1,16 @@
+name: Idea
+description: Something Prune should find, show or do.
+title: "Idea: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      placeholder: Group screenshots of tickets and boarding passes, and suggest removing ones from past trips.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would it help you?

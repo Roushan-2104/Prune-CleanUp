@@ -118,6 +118,8 @@ On the home screen, choose **Check Prune's accuracy…**. Prune shows its
 were cleaning your own phone: **Y** to remove, **N** to keep, **S** to skip.
 At the end you'll see how often Prune was right in each group. **Copy
 results** copies only the percentages: no file names, no pictures.
+**Share them…** copies them too and opens a short public form in your
+browser, ready to paste.
 
 ## Limits
 
@@ -139,3 +141,11 @@ results** copies only the percentages: no file names, no pictures.
 - **A clean-up stopped halfway:** reconnect the phone and Prune reads it
   again. Nothing is lost: trashed items can be restored from the phone's
   Trash, and backed-up hidden items are in **Prune Backups**.
+
+## Send feedback
+
+Choose **Send feedback…** on the home screen, or go to
+[the feedback forms](https://github.com/Roushan-2104/Prune-CleanUp/issues/new/choose):
+something went wrong, accuracy results, or an idea. The forms are public, so
+describe what you saw in words; please don't attach screenshots of your
+photos, chats or payments.

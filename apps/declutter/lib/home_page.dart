@@ -7,6 +7,7 @@ import 'package:phone_link/phone_link.dart';
 
 import 'accuracy_page.dart';
 import 'clean_dialog.dart';
+import 'feedback.dart';
 import 'phone_session.dart';
 import 'photo_scan.dart';
 import 'power.dart';
@@ -262,6 +263,12 @@ class _Overview extends StatelessWidget {
                     onPressed: () =>
                         Navigator.of(context).push(MaterialPageRoute(builder: (_) => AccuracyPage(session: session))),
                     child: const Text('Check Prune\'s accuracy…'),
+                  ),
+                  const SizedBox(width: 24),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: Tone.muted, padding: EdgeInsets.zero),
+                    onPressed: () => openInBrowser(feedbackUrl),
+                    child: const Text('Send feedback…'),
                   ),
                   const SizedBox(width: 24),
                   TextButton(

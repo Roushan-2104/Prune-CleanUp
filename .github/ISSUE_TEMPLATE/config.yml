@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: User guide
+    url: https://github.com/Roushan-2104/Prune-CleanUp/blob/main/docs/USER_GUIDE.md
+    about: How to connect your phone, review, clean and undo.
