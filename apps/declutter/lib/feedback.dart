@@ -1,7 +1,7 @@
 import 'dart:io';
 
 /// Where feedback goes: the project's public issue forms on GitHub.
-/// Prune itself connects to nothing; this only opens the user's browser.
+/// This only opens the user's browser; Prune itself sends nothing.
 const feedbackUrl = 'https://github.com/Roushan-2104/Prune-CleanUp/issues/new/choose';
 const accuracyFeedbackUrl = 'https://github.com/Roushan-2104/Prune-CleanUp/issues/new?template=2-accuracy.yml';
 

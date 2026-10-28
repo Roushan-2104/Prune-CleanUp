@@ -81,14 +81,15 @@ Most cleaners show a bucket called "junk" and ask you to tap Delete. Prune shows
 
 ## Private by design
 
-- **No account, no upload, no analytics, no internet use.** Your photos, chats and payments stay on your laptop.
+- **No account, no upload, no analytics.** Your photos, chats and payments stay on your laptop.
+- **Online only if you allow it:** Prune asks once whether it may check GitHub for new versions (once a day, sending nothing about you or your phone). Say no and it never goes online.
 - Photos are copied to the laptop in batches to be checked, then deleted straight away.
 - Text read from screenshots is encrypted with your Windows account.
 - **Forget this phone** wipes everything Prune saved about it.
 
 ## Get Prune
 
-Download `Prune-1.0.0-Setup.exe` (installs for you only, no admin rights) or the portable `Prune-1.0.0.zip` from **[the latest release](https://github.com/Roushan-2104/Prune-CleanUp/releases/latest)**, then follow the [user guide](docs/USER_GUIDE.md).
+Download the installer (`Prune-<version>-Setup.exe`, installs for you only, no admin rights) or the portable ZIP from **[the latest release](https://github.com/Roushan-2104/Prune-CleanUp/releases/latest)**, then follow the [user guide](docs/USER_GUIDE.md). To update, run the new installer over the old one: no need to uninstall, and your results and backups stay.
 
 Needs Windows 10 or 11 (64-bit), an Android phone and a USB cable that carries data. Windows may show "Windows protected your PC" the first time, because Prune isn't signed with a paid certificate yet: click **More info**, then **Run anyway**.
 

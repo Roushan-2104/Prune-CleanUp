@@ -17,14 +17,18 @@ you review the list, untick what you want to keep, and confirm.
 
 ## Your privacy
 
-- Everything happens on your laptop. Prune sends nothing over the internet:
-  no account, no upload, no analytics.
+- Everything happens on your laptop. No account, no upload, no analytics.
+- Prune goes online for one thing only, and only if you say yes when it asks:
+  once a day it asks GitHub which version of Prune is newest. Nothing about
+  you or your phone is sent. Say "No thanks" and Prune never goes online.
 - Photos are copied to the laptop one batch at a time so they can be
   measured. The copies are deleted straight away.
-- Prune keeps one file on the laptop: `%LOCALAPPDATA%\Prune\prune.db`. It
-  holds file names, sizes, measurements and a record of each clean-up. Text
-  read from your screenshots is stored encrypted with your Windows account,
-  so another Windows user on the same laptop can't read it.
+- Prune keeps its data in `%LOCALAPPDATA%\Prune`: `prune.db` (file names,
+  sizes, measurements and a record of each clean-up) and `settings.json`
+  (your answer about update checks). Text read from your screenshots is
+  stored encrypted with your Windows account, so another Windows user on the
+  same laptop can't read it. Backups of removed hidden files go to
+  `Prune Backups` in your user folder.
 - To delete everything Prune saved about a phone, choose **Forget this
   phone on this laptop…** on the home screen.
 
@@ -32,18 +36,23 @@ you review the list, untick what you want to keep, and confirm.
 
 Use either file below; both hold the same app.
 
-- **Installer (easiest):** run `Prune-1.0.0-Setup.exe`. It installs for
+- **Installer (easiest):** run `Prune-<version>-Setup.exe`. It installs for
   your Windows account only, needs no administrator rights, and adds Prune
   to the Start menu. To remove Prune, use **Settings → Apps**. Uninstalling
   also deletes what Prune saved about your phone, but leaves your
   **Prune Backups** folder alone.
-- **Portable:** unzip `Prune-1.0.0.zip` anywhere and double-click
+- **Portable:** unzip `Prune-<version>.zip` anywhere and double-click
   `Prune.exe`. Keep the files together: the `adb` folder and
   `PruneVision.exe` must stay next to `Prune.exe`.
 
 Windows may say **"Windows protected your PC"**, because Prune isn't signed
 with a paid certificate. Click **More info**, then **Run anyway**. Windows
 asks only the first time.
+
+**Updating:** run the new installer over the old one; there's no need to
+uninstall first. Your results, settings and backups stay. (Portable: unzip
+the new version over the old folder.) If you let Prune check for new
+versions, Home tells you when one is out.
 
 ## 2. Connect your phone
 

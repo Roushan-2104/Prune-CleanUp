@@ -15,6 +15,8 @@ import 'review_page.dart';
 import 'setup_guide.dart';
 import 'theme.dart';
 import 'top_bar.dart';
+import 'update_bar.dart';
+import 'updates.dart';
 
 /// First screen: find the phone, then lead with the safe pick — only what
 /// Prune is sure about — and what's left for the user to check.
@@ -37,6 +39,7 @@ class HomePage extends StatelessWidget {
                 picked: pick?.sureBytes ?? 0,
                 action: session.devices.where((d) => d.ready).length > 1 ? _PhonePicker(session: session) : null,
               ),
+              UpdateBar(check: updates),
               Expanded(
                 // Development only: PRUNE_OPEN=setup shows the setup guide
                 // even with a phone connected, to check how it looks.

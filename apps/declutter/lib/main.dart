@@ -10,6 +10,7 @@ import 'phone_session.dart';
 import 'photo_scan.dart';
 import 'previews.dart';
 import 'theme.dart';
+import 'updates.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,6 +18,7 @@ void main() {
   PreviewCache.clearAll(); // previews and photo copies never outlive a session…
   PhotoScan.clearWork();
   clearStaleTempCopies(Directory.systemTemp); // left by a crash or power cut
+  updates.start(); // only goes online if the user said yes
   runApp(PruneApp(session: PhoneSession(Store.open(databasePath()))));
   // …and are deleted again when the window is closed.
   _exitListener = AppLifecycleListener(
@@ -93,8 +95,7 @@ class PruneApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Light on purpose: photos and small screenshot text are judged most
-    // faithfully on a paper ground. See theme.dart.
+    // "Night archive": a dark gallery with one violet. See theme.dart.
     return MaterialApp(
       title: 'Prune',
       debugShowCheckedModeBanner: false,
