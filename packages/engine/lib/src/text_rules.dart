@@ -216,9 +216,13 @@ Verdict? _payment(String text) {
   final success = _paymentSuccess.where(text.contains).toList();
   final ids = _paymentIds.where(text.contains).toList();
   final upi = _upiId.firstMatch(text)?.group(0);
-  final hasApp = _anyWord(text, _paymentApps);
+  // The app is named by the screen, not by a UPI ID: "paytm.s1x2@pty" or
+  // "shop@paytm" is the payee's account (often a shop on Paytm for
+  // Business), and says nothing about the app the payment was made with.
+  final screen = text.replaceAll(_upiId, ' ');
+  final hasApp = _anyWord(screen, _paymentApps);
   final appName = _paymentAppNames.entries
-      .where((e) => wholeWord(e.key).hasMatch(text))
+      .where((e) => wholeWord(e.key).hasMatch(screen))
       .map((e) => e.value)
       .firstOrNull;
 

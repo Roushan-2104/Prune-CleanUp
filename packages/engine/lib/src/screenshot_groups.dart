@@ -112,6 +112,17 @@ const _notNames = {
   'whatsapp', 'instagram', 'search', 'new chat', 'locked chats', 'archived', 'unread', 'no permission',
   'instagram chats', 'share a link to chat', 'search or ask a question', 'view more details', 'report an issue',
 };
+// A notification or call pop-up at the top of the screen, and the line that
+// ends it (its buttons).
+final _popUpStart = RegExp(
+  r'^\W*whatsapp\b|\bmessages? from \d|•\s*now\b|\bincoming (?:voice |video )?call\b',
+  caseSensitive: false,
+);
+final _popUpEnd = RegExp(r'^\W*(?:reply|mark as read|answer|decline|dismiss)\b', caseSensitive: false);
+final _callBanner = RegExp(r'\b(?:incoming|ongoing|ringing|tap to return)\b', caseSensitive: false);
+// WhatsApp's chat list, not a chat.
+final _chatList = RegExp(r'ask meta a[il]|\ball\s*\n.*\bunread\b|\bunread\b[\s\S]{0,80}\b(?:favourites|archived)\b',
+    caseSensitive: false);
 // App screens' own words, never someone's name.
 final _uiWords = RegExp(r'\b(?:instagram|whatsapp|search|share|messages?|chats?|calls?|settings|notifications?)\b', caseSensitive: false);
 
@@ -121,9 +132,28 @@ final _uiWords = RegExp(r'\b(?:instagram|whatsapp|search|share|messages?|chats?|
 /// mostly letters (or a phone number), not a time, not battery or signal
 /// readings. OCR noise around it is trimmed: a stray avatar letter in
 /// front ("A Neel7"), smudges after it ("Aman Kapoor Oq").
+///
+/// Pop-ups over the chat never give the name: a notification ("WhatsApp •
+/// now · 8 messages from 3 chats", a sender and a cut-off preview) or an
+/// incoming call ("Incoming voice call", "Answer") is skipped down to its
+/// action line; if the pop-up fills the top, there is no name. The chat
+/// list ("Ask Meta AI or Search", "All · Unread · Favourites") isn't a
+/// chat with anyone either.
 String? chatTitle(String rawText) {
-  final lines = rawText.replaceAll('\r', '').split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).take(6);
-  for (final line in lines) {
+  if (_chatList.hasMatch(rawText)) return null;
+  final all = rawText.replaceAll('\r', '').split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).take(12).toList();
+  final popUp = all.take(4).any(_popUpStart.hasMatch);
+  final lines = popUp ? all : all.take(6).toList();
+  var inPopUp = popUp;
+  for (final (i, line) in lines.indexed) {
+    if (inPopUp) {
+      if (_popUpEnd.hasMatch(line)) inPopUp = false;
+      continue;
+    }
+    // A name cut short ("Rahul…", "Meera Iyer: see you...") is a preview, not a header.
+    if (line.endsWith('...') || line.endsWith('…')) continue;
+    // The caller in an incoming-call banner, not the chat.
+    if (i + 1 < lines.length && _callBanner.hasMatch(lines[i + 1])) continue;
     // Status bar and its pieces: times, battery "949%" / "0350/0", signal.
     if (_time.hasMatch(line) && !line.startsWith('+')) continue;
     if (RegExp(r'\d{2,3}\s?%|\d{3,4}/0|\b(?:lte|[45]g|volte)\b', caseSensitive: false).hasMatch(line)) continue;

@@ -17,6 +17,22 @@ void main() {
     });
     test('a contact saved as a number', () => expect(chatTitle('13:48\n+91 90000 12345\nToday'), '+91 90000 12345'));
     test('app words are never names', () => expect(chatTitle('3:52\nInstagram • Chats\nSearch or ask a question'), isNull));
+
+    // Made-up names; the shapes follow what WhatsApp shows.
+    test('a notification pop-up over the chat is skipped', () {
+      expect(chatTitle('9:41\nWhatsApp • now\nKiran Rao\nare you coming?\nReply  Mark as read\nAnil Joshi\nonline\nok'),
+          'Anil Joshi');
+      expect(chatTitle('@ WhatsApp\nW... • 8 messages from 3 chats • now\nStudy Group You de...\nTrip plan with s...'),
+          isNull, reason: 'the pop-up fills the top: no chat name to take');
+    });
+    test('the caller in an incoming-call banner is not the chat', () {
+      expect(chatTitle('9:41\nKiran Rao\nIncoming voice call\nDecline  Answer\nAnil Joshi\nlast seen today'), 'Anil Joshi');
+    });
+    test('a cut-off preview is not a name', () => expect(chatTitle('9:41\nKiran Rao: are you...\nAnil Joshi\nhi'), 'Anil Joshi'));
+    test('the chat list is not a chat with anyone', () {
+      expect(chatTitle('11:52\nWhatsApp\nAsk Meta AI or Search\nAll\nUnread\nFavourites\nAnil Joshi'), isNull);
+      expect(chatTitle('09:22\nChats\nAll\nUnread 11\nArchived\nFavourites\nGroups 2'), isNull);
+    });
   });
 
   test('chats with one person get their own group; one-offs do not', () {

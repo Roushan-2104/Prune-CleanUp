@@ -185,6 +185,15 @@ Pay   Request   Message''';
       expect(v.tier, Tier.sure);
       expect(v.label, 'UPI payments');
     });
+    test('a payee\'s UPI ID does not name the app the payment was made with', () {
+      // A shop on Paytm for Business, paid from another UPI app (made-up ID).
+      const text = '13:46\nPayment Successful\n23 January 2026 at 01:46 PM\nSample Tea Stall\npaytm.s1abc2d@pty\n'
+          'View Details\nSplit Expense';
+      final v = classifyScreenshotText(text);
+      expect(v.category, JunkCategory.paymentScreenshot);
+      expect(v.label, 'UPI payments');
+      expect(classifyScreenshotText('$text\nPaytm').label, 'Paytm payments', reason: 'the screen itself says Paytm');
+    });
     test('a shop\'s "Scan & Pay" QR code is not a receipt', () {
       const text = 'PhonePe\nACCEPTED HERE\nScan & Pay Using PhonePe App\nSample Store\nsampleshop@ybl';
       final v = classifyScreenshotText(text);

@@ -23,15 +23,21 @@ class Selection extends ChangeNotifier {
 
   final Set<String> picked;
 
+  /// Goes up on every change, so counts worked out from the ticks can be
+  /// kept until the ticks change.
+  int version = 0;
+
   bool has(String path) => picked.contains(path);
 
   void toggle(String path) {
     picked.contains(path) ? picked.remove(path) : picked.add(path);
+    version++;
     notifyListeners();
   }
 
   void setAll(Iterable<String> paths, bool on) {
     on ? picked.addAll(paths) : picked.removeAll(paths);
+    version++;
     notifyListeners();
   }
 }
@@ -179,6 +185,26 @@ class _ReviewPageState extends State<ReviewPage> {
   /// Biggest first, kept together by app ("WhatsApp chats", "PhonePe
   /// payments"…) with the biggest group on top, as the list shows them.
   List<_Entry> itemsIn(JunkCategory? c) => index.items[c] ?? const [];
+
+  /// How many items of [c] are ticked. Counted for every group at once, and
+  /// only again when the ticks or the suggestions change: the group list
+  /// asks on every redraw, and counting 7,000-item groups each time made it
+  /// stutter while scrolling.
+  int pickedIn(JunkCategory c) {
+    if (!identical(_countedIndex, index) || _countedVersion != selection.version) {
+      _picked = {
+        for (final MapEntry(key: cat, value: list) in index.items.entries)
+          cat: list.where((e) => selection.has(e.key)).length,
+      };
+      _countedIndex = index;
+      _countedVersion = selection.version;
+    }
+    return _picked[c] ?? 0;
+  }
+
+  Map<JunkCategory, int> _picked = const {};
+  _Index? _countedIndex;
+  int _countedVersion = -1;
 
   /// The sub-group a card sits in: the kept original for copies, else the
   /// verdict's label ("Nikhil · WhatsApp").
@@ -374,7 +400,8 @@ class _ReviewPageState extends State<ReviewPage> {
                       children: [
                         SizedBox(
                           width: (w * 0.19).clamp(230.0, 290.0),
-                          child: _Rail(state: this),
+                          // Its own layer: cards changing beside it don't repaint it.
+                          child: RepaintBoundary(child: _Rail(state: this)),
                         ),
                         Expanded(
                           child: _Group(state: this, category: current, items: items),
@@ -455,7 +482,7 @@ class _RailEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     final on = category == state.current;
     final items = state.itemsIn(category);
-    final picked = items.where((e) => state.selection.has(e.key)).length;
+    final picked = state.pickedIn(category);
     // Square root, so a 23 GB group doesn't flatten the 11 MB ones to nothing.
     final share = math.sqrt(bytes / biggest);
     return Material(
