@@ -119,6 +119,9 @@ final _popUpStart = RegExp(
   caseSensitive: false,
 );
 final _popUpEnd = RegExp(r'^\W*(?:reply|mark as read|answer|decline|dismiss)\b', caseSensitive: false);
+// An ongoing call's timer: a dash, then minutes and seconds ("- 4:08",
+// "Meera - 50:45"). The status bar's clock has no dash in front.
+final _callTimer = RegExp(r'(?:^|\s)[-–]\s*\d{1,2}:\d{2}(?::\d{2})?\s*$');
 final _callBanner = RegExp(r'\b(?:incoming|ongoing|ringing|tap to return)\b', caseSensitive: false);
 // WhatsApp's chat list, not a chat.
 final _chatList = RegExp(r'ask meta a[il]|\ball\s*\n.*\bunread\b|\bunread\b[\s\S]{0,80}\b(?:favourites|archived)\b',
@@ -145,11 +148,19 @@ String? chatTitle(String rawText) {
   final popUp = all.take(4).any(_popUpStart.hasMatch);
   final lines = popUp ? all : all.take(6).toList();
   var inPopUp = popUp;
+  // An ongoing call's bar ("Meera - 4:08") is the topmost thing under the
+  // status bar, so with a call timer near the top the first name found is
+  // the person on the call, not the chat. When OCR keeps the name on the
+  // timer's line, skipping that line is enough; when it splits them, in
+  // either order, the first name elsewhere is skipped.
+  final timer = lines.take(6).where(_callTimer.hasMatch).firstOrNull;
+  var skipCaller = timer != null && !RegExp(r'\p{L}{2}', unicode: true).hasMatch(timer);
   for (final (i, line) in lines.indexed) {
     if (inPopUp) {
       if (_popUpEnd.hasMatch(line)) inPopUp = false;
       continue;
     }
+    if (_callTimer.hasMatch(line)) continue;
     // A name cut short ("Rahul…", "Meera Iyer: see you...") is a preview, not a header.
     if (line.endsWith('...') || line.endsWith('…')) continue;
     // The caller in an incoming-call banner, not the chat.
@@ -158,7 +169,11 @@ String? chatTitle(String rawText) {
     if (_time.hasMatch(line) && !line.startsWith('+')) continue;
     if (RegExp(r'\d{2,3}\s?%|\d{3,4}/0|\b(?:lte|[45]g|volte)\b', caseSensitive: false).hasMatch(line)) continue;
 
-    if (RegExp(r'^\+?\d[\d\s\-]{8,}$').hasMatch(line)) return line; // a saved-as-number contact
+    if (RegExp(r'^\+?\d[\d\s\-]{8,}$').hasMatch(line)) {
+      if (!skipCaller) return line; // a saved-as-number contact
+      skipCaller = false; // …or a caller saved as a number
+      continue;
+    }
 
     var tokens = line
         .replaceAll(RegExp(r"[^\p{L}\p{N}\s'._\-+()&]", unicode: true), ' ')
@@ -174,6 +189,10 @@ String? chatTitle(String rawText) {
     if (name.length < 3 || name.length > 40 || letters < 3 || tokens.length > 6) continue;
     if (letters < name.replaceAll(' ', '').length * 0.6) continue;
     if (_notNames.contains(name.toLowerCase()) || _uiWords.hasMatch(name)) continue;
+    if (skipCaller) {
+      skipCaller = false;
+      continue;
+    }
     return name;
   }
   return null;

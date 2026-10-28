@@ -29,6 +29,16 @@ void main() {
       expect(chatTitle('9:41\nKiran Rao\nIncoming voice call\nDecline  Answer\nAnil Joshi\nlast seen today'), 'Anil Joshi');
     });
     test('a cut-off preview is not a name', () => expect(chatTitle('9:41\nKiran Rao: are you...\nAnil Joshi\nhi'), 'Anil Joshi'));
+    test('the person in an ongoing call\'s bar is not the chat', () {
+      // The bar read as one line…
+      expect(chatTitle('1:42\n9400/0\nKiran Rao - 50:45\nAnil Joshi\nonline'), 'Anil Joshi');
+      // …or split: the timer, a stray icon letter, then the caller's name.
+      expect(chatTitle('19:30 @\n155\n- 4:08\np\n• Kiran Rao\n+91 90000 12345\nToday'), '+91 90000 12345');
+      expect(chatTitle('19:30\n- 4:08\n+91 90000 11111\nAnil Joshi\nToday'), 'Anil Joshi', reason: 'caller saved as a number');
+      expect(chatTitle('19:30\nKiran Rao\n- 4:08\nAnil Joshi'), 'Anil Joshi', reason: 'name above its timer');
+      expect(chatTitle('12:35\nKiran Rao\nStudy Group\nAnil, Meera, Neel\n- 17:02'), 'Study Group',
+          reason: 'timer read several lines after its name');
+    });
     test('the chat list is not a chat with anyone', () {
       expect(chatTitle('11:52\nWhatsApp\nAsk Meta AI or Search\nAll\nUnread\nFavourites\nAnil Joshi'), isNull);
       expect(chatTitle('09:22\nChats\nAll\nUnread 11\nArchived\nFavourites\nGroups 2'), isNull);
