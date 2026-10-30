@@ -224,6 +224,8 @@ class PhotoScan extends ChangeNotifier {
         takenAtMs: f.takenMs ?? f.modifiedSec * 1000,
         screenshot: screenshot,
         text: r.text,
+        // An empty string (not null) when nothing was read, so it isn't read again.
+        boxes: r.text == null ? null : encodeBoxes(r.boxes ?? const []),
         dHash: dHash(gray),
         sharpness: bestTileSharpness(gray),
         entropy: entropy(gray),

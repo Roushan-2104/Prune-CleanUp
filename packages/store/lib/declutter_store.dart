@@ -82,7 +82,7 @@ class Store {
 
   /// Whether screenshot text is encrypted at rest (see [Dpapi]).
   final bool protectText;
-  static const _schemaVersion = 5;
+  static const _schemaVersion = 6;
 
   void _migrate() {
     _db.execute('PRAGMA foreign_keys = ON');
@@ -124,6 +124,12 @@ class Store {
           FOREIGN KEY (phone, path) REFERENCES files (phone, path) ON DELETE CASCADE
         ) WITHOUT ROWID;
       ''');
+    }
+    if (version < 6) {
+      // Where each line of a screenshot's text sits (positions only, no
+      // text), so chat names can be read from the screen's layout.
+      final has = _db.select('PRAGMA table_info(measurements)').any((c) => c['name'] == 'boxes');
+      if (!has) _db.execute('ALTER TABLE measurements ADD COLUMN boxes TEXT');
     }
     var vacuum = false;
     if (version < 4 && protectText) {
@@ -282,7 +288,9 @@ class Store {
           SELECT f.path FROM files f
           LEFT JOIN measurements m ON m.phone = f.phone AND m.path = f.path
             AND m.modified_sec = f.modified_sec AND m.bytes = f.bytes
-          WHERE f.phone = ? AND m.path IS NULL
+          WHERE f.phone = ? AND (m.path IS NULL
+            -- Screenshots read before line positions were kept: read once more.
+            OR (m.screenshot = 1 AND m.boxes IS NULL))
           ORDER BY f.path
         ''', [phone]))
           r['path'] as String,
@@ -293,14 +301,14 @@ class Store {
     final now = _now();
     _transaction(() {
       final put = _db.prepare('''
-        INSERT OR REPLACE INTO measurements (phone, path, modified_sec, bytes, taken_ms, screenshot, text,
+        INSERT OR REPLACE INTO measurements (phone, path, modified_sec, bytes, taken_ms, screenshot, text, boxes,
                                              dhash, sharpness, entropy, faces, landscape, measured_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''');
       try {
         for (final MapEntry(key: path, value: a) in byPath.entries) {
-          put.execute([phone, path, a.modified, a.bytes, a.takenAtMs, a.screenshot ? 1 : 0, _seal(a.text), a.dHash,
-            a.sharpness, a.entropy, a.faceCount, a.landscape == null ? null : (a.landscape! ? 1 : 0), now]);
+          put.execute([phone, path, a.modified, a.bytes, a.takenAtMs, a.screenshot ? 1 : 0, _seal(a.text), a.boxes,
+            a.dHash, a.sharpness, a.entropy, a.faceCount, a.landscape == null ? null : (a.landscape! ? 1 : 0), now]);
         }
       } finally {
         put.close();
@@ -352,6 +360,7 @@ class Store {
             takenAtMs: r['taken_ms'] as int,
             screenshot: r['screenshot'] == 1,
             text: _open(r['text'] as String?),
+            boxes: r['boxes'] as String?,
             dHash: r['dhash'] as int?,
             sharpness: (r['sharpness'] as num?)?.toDouble(),
             entropy: (r['entropy'] as num?)?.toDouble(),

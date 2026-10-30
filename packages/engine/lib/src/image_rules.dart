@@ -1,4 +1,5 @@
 import 'file_rules.dart';
+import 'layout.dart';
 import 'photo_rules.dart';
 import 'scan_cache.dart';
 import 'screenshot_groups.dart';
@@ -92,6 +93,7 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
   final out = <String, FileVerdict>{};
   final fingerprints = <PhotoFingerprint>[];
   final shots = <String, (Verdict, String)>{};
+  final layouts = <String, List<LineBox>>{}; // where each screenshot's lines sit, when known
 
   for (final MapEntry(key: path, value: a) in analyses.entries) {
     final f = facts[path];
@@ -107,6 +109,7 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
       if (!isScreenshotByPlace(f)) v = Verdict(v.category, v.confidence,
           ['Screenshot saved or received from another app', ...v.reasons], label: v.label, evidence: v.evidence);
       shots[path] = (v, a.text ?? '');
+      if (a.boxes case final b? when b.isNotEmpty) layouts[path] = decodeBoxes(b);
       continue;
     }
     if (a.dHash == null || a.sharpness == null || a.entropy == null) continue;
@@ -127,7 +130,8 @@ Map<String, FileVerdict> judgeImages(Map<String, Analysis> analyses, Map<String,
     if (blur != null) out[path] = FileVerdict(blur);
   }
 
-  for (final MapEntry(key: path, value: v) in groupScreenshots(shots, installedPackages: installedPackages).entries) {
+  for (final MapEntry(key: path, value: v)
+      in groupScreenshots(shots, installedPackages: installedPackages, layouts: layouts).entries) {
     out[path] = FileVerdict(v);
   }
 

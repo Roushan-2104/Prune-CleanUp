@@ -17,12 +17,16 @@ class VisionError implements Exception {
 
 /// What Windows found in one image.
 class VisionResult {
-  const VisionResult({required this.path, this.text, this.faces, this.gray, this.thumb, this.error});
+  const VisionResult({required this.path, this.text, this.boxes, this.faces, this.gray, this.thumb, this.error});
 
   final String path;
 
   /// Text lines joined with "\n"; null if text wasn't requested or failed.
   final String? text;
+
+  /// Where each line of [text] sits, in order: left, top, width, height,
+  /// as fractions of the picture's width and height (0..1).
+  final List<(double, double, double, double)>? boxes;
 
   /// Number of faces; null if faces weren't requested or failed.
   final int? faces;
@@ -248,6 +252,7 @@ class Vision {
     return VisionResult(
       path: path,
       text: j['text'] as String?,
+      boxes: _boxes(j['boxes']),
       faces: j['faces'] as int?,
       gray: _gray(j['gray']),
       thumb: j['thumb'] is String ? base64Decode(j['thumb'] as String) : null,
@@ -255,6 +260,15 @@ class Vision {
   }
 
   /// Unpacks the helper's grayscale image, dropping any row padding.
+  static List<(double, double, double, double)>? _boxes(Object? b) {
+    if (b is! List) return null;
+    double n(Object? v) => v is num ? v.toDouble().clamp(0.0, 1.0) : 0.0;
+    return [
+      for (final box in b)
+        if (box is List && box.length == 4) (n(box[0]), n(box[1]), n(box[2]), n(box[3])) else (0.0, 0.0, 0.0, 0.0),
+    ];
+  }
+
   static SmallGray? _gray(Object? g) {
     if (g is! Map<String, dynamic>) return null;
     final w = g['w'] as int, h = g['h'] as int, stride = g['stride'] as int;

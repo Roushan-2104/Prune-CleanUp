@@ -13,6 +13,7 @@ class Analysis {
     required this.takenAtMs,
     required this.screenshot,
     this.text,
+    this.boxes,
     this.dHash,
     this.sharpness,
     this.entropy,
@@ -29,6 +30,10 @@ class Analysis {
   /// OCR text (screenshots only).
   final String? text;
 
+  /// Where each line of [text] sits on the screen ([encodeBoxes]); null
+  /// for screenshots read before positions were kept.
+  final String? boxes;
+
   // Camera photos only:
   final int? dHash;
   final double? sharpness;
@@ -42,12 +47,14 @@ class Analysis {
 
   Analysis withFaceCount(int count) => Analysis(
         modified: modified, bytes: bytes, takenAtMs: takenAtMs, screenshot: screenshot,
-        text: text, dHash: dHash, sharpness: sharpness, entropy: entropy, faceCount: count, landscape: landscape,
+        text: text, boxes: boxes, dHash: dHash, sharpness: sharpness, entropy: entropy, faceCount: count,
+        landscape: landscape,
       );
 
   Map<String, Object?> toJson() => {
         'm': modified, 'b': bytes, 't': takenAtMs, 's': screenshot,
         if (text != null) 'x': text,
+        if (boxes != null) 'g': boxes,
         if (dHash != null) 'h': dHash,
         if (sharpness != null) 'p': sharpness,
         if (entropy != null) 'e': entropy,
@@ -61,6 +68,7 @@ class Analysis {
         takenAtMs: j['t'] as int,
         screenshot: j['s'] as bool,
         text: j['x'] as String?,
+        boxes: j['g'] as String?,
         dHash: j['h'] as int?,
         sharpness: (j['p'] as num?)?.toDouble(),
         entropy: (j['e'] as num?)?.toDouble(),

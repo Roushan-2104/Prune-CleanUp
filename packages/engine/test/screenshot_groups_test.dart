@@ -39,9 +39,58 @@ void main() {
       expect(chatTitle('12:35\nKiran Rao\nStudy Group\nAnil, Meera, Neel\n- 17:02'), 'Study Group',
           reason: 'timer read several lines after its name');
     });
+    // Layout: made-up names at the positions real chat screens put them.
+    test('by layout: the name beside the profile picture, under the status bar', () {
+      expect(
+          chatTitle('9:41\no 949%\nAnil Joshi Oq\nsee you at 5', boxes: const [
+            LineBox(0.04, 0.019, 0.1, 0.015), LineBox(0.61, 0.016, 0.3, 0.018),
+            LineBox(0.26, 0.068, 0.4, 0.019), LineBox(0.07, 0.123, 0.5, 0.02),
+          ]),
+          'Anil Joshi');
+    });
+    test('by layout: the call bar\'s whole row is skipped, the header below it is the chat', () {
+      // Split call bar: timer and caller on one row; avatar letter at the left edge.
+      expect(
+          chatTitle('19:30\n- 4:08\np\n• Kiran Rao\n+91 90000 12345\nToday', boxes: const [
+            LineBox(0.07, 0.020, 0.17, 0.013), LineBox(0.59, 0.077, 0.08, 0.011), LineBox(0.144, 0.134, 0.02, 0.012),
+            LineBox(0.33, 0.075, 0.25, 0.015), LineBox(0.219, 0.133, 0.28, 0.013), LineBox(0.46, 0.178, 0.07, 0.011),
+          ]),
+          '+91 90000 12345');
+      // Timer not read at all, only "Name -" left on the call bar's row.
+      expect(
+          chatTitle('6:06\nStudy Group -\nMeera Iyer\nhello', boxes: const [
+            LineBox(0.04, 0.017, 0.3, 0.019), LineBox(0.231, 0.069, 0.42, 0.021),
+            LineBox(0.261, 0.138, 0.25, 0.017), LineBox(0.17, 0.212, 0.5, 0.02),
+          ]),
+          'Meera Iyer');
+    });
+    test('by layout: a header the app cut short is still the name', () {
+      expect(
+          chatTitle('11:19\nKiran...\nkiran_r...\nhi', boxes: const [
+            LineBox(0.04, 0.019, 0.07, 0.014), LineBox(0.30, 0.061, 0.14, 0.012),
+            LineBox(0.30, 0.081, 0.16, 0.012), LineBox(0.45, 0.46, 0.4, 0.02),
+          ]),
+          'Kiran');
+    });
+    test('by layout: a pop-up over the top gives no name unless a header sits below it', () {
+      const popUp = [
+        LineBox(0.05, 0.03, 0.2, 0.015), LineBox(0.05, 0.055, 0.4, 0.015),
+        LineBox(0.05, 0.08, 0.6, 0.018), LineBox(0.05, 0.11, 0.15, 0.015),
+      ];
+      expect(chatTitle('@ Instagram\nneel7 • now\nsaw this?\nReply\nlater then', boxes: const [
+        ...popUp, LineBox(0.3, 0.6, 0.3, 0.02),
+      ]), isNull);
+      expect(chatTitle('@ Instagram\nneel7 • now\nsaw this?\nReply\nAnil Joshi\nlater then', boxes: const [
+        ...popUp, LineBox(0.26, 0.14, 0.3, 0.019), LineBox(0.3, 0.6, 0.3, 0.02),
+      ]), 'Anil Joshi');
+    });
+    test('by layout: positions that don\'t match the text fall back to the text rules', () {
+      expect(chatTitle('17:02\nNeel7\nCall me after class', boxes: const [LineBox(0, 0, 0, 0)]), 'Neel7');
+    });
     test('the chat list is not a chat with anyone', () {
       expect(chatTitle('11:52\nWhatsApp\nAsk Meta AI or Search\nAll\nUnread\nFavourites\nAnil Joshi'), isNull);
       expect(chatTitle('09:22\nChats\nAll\nUnread 11\nArchived\nFavourites\nGroups 2'), isNull);
+      expect(chatTitle('10:05\nSearch contacts\nAll\nFavourites\nMissed\nAnil Joshi'), isNull, reason: 'contacts list');
     });
   });
 

@@ -351,15 +351,39 @@ static class Program
     static string ReadText(OcrEngine ocr, Picture picture, uint maxSide)
     {
         if (ocr == null) throw new InvalidOperationException("Windows text recognition is not available");
-        OcrResult result = Await(ocr.RecognizeAsync(picture.Decode(maxSide, BitmapAlphaMode.Premultiplied, screensFullSize: true)));
+        SoftwareBitmap bmp = picture.Decode(maxSide, BitmapAlphaMode.Premultiplied, screensFullSize: true);
+        OcrResult result = Await(ocr.RecognizeAsync(bmp));
         // Keep line breaks: the rules use them (e.g. "Paid to" on one line, name on the next).
         StringBuilder text = new StringBuilder();
+        // Where each line sits, as fractions of the picture's width and height
+        // ([left, top, width, height]), so the rules can read a screen's
+        // layout (a chat's name sits beside its photo, under any call bar).
+        StringBuilder boxes = new StringBuilder("[");
+        double w = Math.Max(1, bmp.PixelWidth), h = Math.Max(1, bmp.PixelHeight);
         foreach (OcrLine l in result.Lines)
         {
             if (text.Length > 0) text.Append('\n');
             text.Append(l.Text);
+            double x0 = double.MaxValue, y0 = double.MaxValue, x1 = 0, y1 = 0;
+            foreach (OcrWord word in l.Words)
+            {
+                Rect r = word.BoundingRect;
+                x0 = Math.Min(x0, r.X); y0 = Math.Min(y0, r.Y);
+                x1 = Math.Max(x1, r.X + r.Width); y1 = Math.Max(y1, r.Y + r.Height);
+            }
+            if (l.Words.Count == 0) { x0 = y0 = x1 = y1 = 0; }
+            if (boxes.Length > 1) boxes.Append(',');
+            boxes.Append('[').Append(Frac(x0 / w)).Append(',').Append(Frac(y0 / h)).Append(',')
+                .Append(Frac((x1 - x0) / w)).Append(',').Append(Frac((y1 - y0) / h)).Append(']');
         }
-        return ",\"text\":" + Json(text.ToString()) + ",\"lines\":" + result.Lines.Count;
+        boxes.Append(']');
+        return ",\"text\":" + Json(text.ToString()) + ",\"lines\":" + result.Lines.Count + ",\"boxes\":" + boxes;
+    }
+
+    /// A 0..1 fraction with four decimals, in JSON's number format.
+    static string Frac(double v)
+    {
+        return Math.Max(0, Math.Min(1, v)).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// Returns the JSON field `,"faces":n`.

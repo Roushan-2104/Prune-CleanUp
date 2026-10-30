@@ -1,3 +1,4 @@
+import 'layout.dart';
 import 'text_rules.dart' show wholeWord;
 import 'verdict.dart';
 
@@ -6,8 +7,11 @@ import 'verdict.dart';
 /// app or website they show ("leetcode.com", "YouTube"). A name needs
 /// [minGroup] screenshots to get its own group, so one-offs don't clutter
 /// the list; the rest keep their broader label.
+///
+/// [layouts] holds, per path, where each line of the text sits on screen
+/// (when known), so chat names are read from the screen's layout.
 Map<String, Verdict> groupScreenshots(Map<String, (Verdict, String)> shots,
-    {Iterable<String> installedPackages = const [], int minGroup = 3}) {
+    {Iterable<String> installedPackages = const [], int minGroup = 3, Map<String, List<LineBox>> layouts = const {}}) {
   final out = <String, Verdict>{};
 
   // Chats: by the name at the top of the screen. (AI and Discord screens
@@ -17,7 +21,7 @@ Map<String, Verdict> groupScreenshots(Map<String, (Verdict, String)> shots,
   final unknownApp = <String>{}; // paths whose app wasn't recognised
   for (final MapEntry(key: path, value: (v, text)) in shots.entries) {
     if (v.category != JunkCategory.chatScreenshot || v.label == 'AI chats' || v.label == 'Discord chats') continue;
-    final name = chatTitle(text);
+    final name = chatTitle(text, boxes: layouts[path]);
     if (name == null) continue;
     if (v.label == null || v.label == 'Other chats') unknownApp.add(path);
     final key = '${v.label}|${_key(name)}';
@@ -120,12 +124,17 @@ final _popUpStart = RegExp(
 );
 final _popUpEnd = RegExp(r'^\W*(?:reply|mark as read|answer|decline|dismiss)\b', caseSensitive: false);
 // An ongoing call's timer: a dash, then minutes and seconds ("- 4:08",
-// "Meera - 50:45"). The status bar's clock has no dash in front.
-final _callTimer = RegExp(r'(?:^|\s)[-–]\s*\d{1,2}:\d{2}(?::\d{2})?\s*$');
+// "Meera - 50:45"). The status bar's clock has no dash in front. OCR
+// sometimes keeps only the dash ("Meera -"): that is the call bar too.
+final _callTimer = RegExp(r'(?:^|\s)[-–]\s*(?:\d{1,2}:\d{2}(?::\d{2})?)?\s*$');
 final _callBanner = RegExp(r'\b(?:incoming|ongoing|ringing|tap to return)\b', caseSensitive: false);
 // WhatsApp's chat list, not a chat.
 final _chatList = RegExp(r'ask meta a[il]|\ball\s*\n.*\bunread\b|\bunread\b[\s\S]{0,80}\b(?:favourites|archived)\b',
     caseSensitive: false);
+// A list screen's filter chips ("All", "Favourites"): contacts, call logs,
+// chat lists. Not a chat with anyone.
+final _filterChips = RegExp(r'^\s*all\b[\s\S]{0,120}\bfavourites\b|\bfavourites\b[\s\S]{0,120}^\s*all\b',
+    caseSensitive: false, multiLine: true);
 // App screens' own words, never someone's name.
 final _uiWords = RegExp(r'\b(?:instagram|whatsapp|search|share|messages?|chats?|calls?|settings|notifications?)\b', caseSensitive: false);
 
@@ -142,9 +151,27 @@ final _uiWords = RegExp(r'\b(?:instagram|whatsapp|search|share|messages?|chats?|
 /// action line; if the pop-up fills the top, there is no name. The chat
 /// list ("Ask Meta AI or Search", "All · Unread · Favourites") isn't a
 /// chat with anyone either.
-String? chatTitle(String rawText) {
-  if (_chatList.hasMatch(rawText)) return null;
-  final all = rawText.replaceAll('\r', '').split('\n').map((l) => l.trim()).where((l) => l.isNotEmpty).take(12).toList();
+///
+/// With [boxes] (where each line of [rawText] sits), the name is read from
+/// the screen's layout instead: see [_titleByLayout]. Text order alone is
+/// the fallback, for screenshots read before positions were kept.
+String? chatTitle(String rawText, {List<LineBox>? boxes}) {
+  if (_chatList.hasMatch(rawText) || _filterChips.hasMatch(rawText)) return null;
+  final raw = rawText.replaceAll('\r', '').split('\n');
+  if (boxes != null && boxes.length == raw.length) {
+    if (!raw.take(4).any((l) => _popUpStart.hasMatch(l.trim()))) {
+      final name = _titleByLayout(raw, boxes);
+      if (name != null) return name;
+    } else {
+      // A pop-up over the screen: only a header below the pop-up can be the
+      // name; without its buttons line, the pop-up's extent is unknown.
+      final end = raw.indexWhere((l) => _popUpEnd.hasMatch(l.trim()));
+      if (end < 0) return null;
+      final popUpBottom = boxes.take(end + 1).fold(0.0, (m, b) => b.bottom > m ? b.bottom : m);
+      return _titleByLayout(raw, boxes, below: popUpBottom);
+    }
+  }
+  final all = raw.map((l) => l.trim()).where((l) => l.isNotEmpty).take(12).toList();
   final popUp = all.take(4).any(_popUpStart.hasMatch);
   final lines = popUp ? all : all.take(6).toList();
   var inPopUp = popUp;
@@ -165,37 +192,82 @@ String? chatTitle(String rawText) {
     if (line.endsWith('...') || line.endsWith('…')) continue;
     // The caller in an incoming-call banner, not the chat.
     if (i + 1 < lines.length && _callBanner.hasMatch(lines[i + 1])) continue;
-    // Status bar and its pieces: times, battery "949%" / "0350/0", signal.
-    if (_time.hasMatch(line) && !line.startsWith('+')) continue;
-    if (RegExp(r'\d{2,3}\s?%|\d{3,4}/0|\b(?:lte|[45]g|volte)\b', caseSensitive: false).hasMatch(line)) continue;
-
-    if (RegExp(r'^\+?\d[\d\s\-]{8,}$').hasMatch(line)) {
-      if (!skipCaller) return line; // a saved-as-number contact
-      skipCaller = false; // …or a caller saved as a number
-      continue;
-    }
-
-    var tokens = line
-        .replaceAll(RegExp(r"[^\p{L}\p{N}\s'._\-+()&]", unicode: true), ' ')
-        .split(RegExp(r'\s+'))
-        .where((t) => t.isNotEmpty)
-        .toList();
-    if (tokens.length > 1 && tokens.first.length == 1) tokens = tokens.sublist(1); // avatar letter
-    while (tokens.length > 1 && tokens.last.length <= 2) {
-      tokens = tokens.sublist(0, tokens.length - 1); // trailing smudge
-    }
-    final name = tokens.join(' ').replaceAll(RegExp(r"^[.'_\-]+|[.'_\-]+$"), '');
-    final letters = RegExp(r'\p{L}', unicode: true).allMatches(name).length;
-    if (name.length < 3 || name.length > 40 || letters < 3 || tokens.length > 6) continue;
-    if (letters < name.replaceAll(' ', '').length * 0.6) continue;
-    if (_notNames.contains(name.toLowerCase()) || _uiWords.hasMatch(name)) continue;
+    final name = _nameFrom(line);
+    if (name == null) continue;
     if (skipCaller) {
-      skipCaller = false;
+      skipCaller = false; // the person on the call, saved by name or as a number
       continue;
     }
     return name;
   }
   return null;
+}
+
+/// The chat's name from where lines sit on the screen. A chat screen is
+/// laid out the same way in every messaging app:
+///
+/// - the status bar across the very top (time, battery): above 3.5%;
+/// - the name in the header, right of the back arrow and profile picture
+///   (which start at the left edge): starting between 15% and 45% across,
+///   and near the top (within the top 20%);
+/// - during a call, a bar with the caller's name and a timer ("- 4:08")
+///   pushes the header down: the timer's whole row is the call bar.
+///
+/// The header is the topmost line of that zone, outside the call bar's row.
+/// A header cut short by the app ("Kiran…" in Instagram) is still the name.
+String? _titleByLayout(List<String> raw, List<LineBox> boxes, {double below = 0}) {
+  final barRows = [
+    for (final (i, b) in boxes.indexed)
+      if (b.top < 0.12 && _callTimer.hasMatch(raw[i].trim())) b.middleY,
+  ];
+  final zone = [
+    for (final (i, b) in boxes.indexed)
+      if (b.height > 0 &&
+          b.top > below &&
+          b.top >= 0.035 &&
+          b.top <= 0.2 &&
+          b.left >= 0.15 &&
+          b.left <= 0.45 &&
+          !barRows.any((y) => (b.middleY - y).abs() < 0.02))
+        i,
+  ]..sort((a, b) => boxes[a].top.compareTo(boxes[b].top));
+  if (zone.isEmpty) return null;
+  // Only the header's own row: below it are messages, never the name.
+  final headerTop = boxes[zone.first].top;
+  for (final i in zone) {
+    if (boxes[i].top - headerTop > 0.015) break;
+    final name = _nameFrom(raw[i].trim());
+    if (name != null) return name;
+  }
+  return null;
+}
+
+/// A name from one line, or null if the line isn't one: status bar pieces,
+/// app words, too short, too long or mostly not letters. A contact saved as
+/// a number keeps its number. OCR noise is trimmed: a stray avatar letter in
+/// front ("A Neel7"), smudges after it ("Aman Kapoor Oq"), dots of a name
+/// cut short ("Kiran...").
+String? _nameFrom(String line) {
+  // Status bar and its pieces: times, battery "949%" / "0350/0", signal.
+  if (_time.hasMatch(line) && !line.startsWith('+')) return null;
+  if (RegExp(r'\d{2,3}\s?%|\d{3,4}/0|\b(?:lte|[45]g|volte)\b', caseSensitive: false).hasMatch(line)) return null;
+  if (RegExp(r'^\+?\d[\d\s\-]{8,}$').hasMatch(line)) return line; // a saved-as-number contact
+
+  var tokens = line
+      .replaceAll(RegExp(r"[^\p{L}\p{N}\s'._\-+()&]", unicode: true), ' ')
+      .split(RegExp(r'\s+'))
+      .where((t) => t.isNotEmpty)
+      .toList();
+  if (tokens.length > 1 && tokens.first.length == 1) tokens = tokens.sublist(1); // avatar letter
+  while (tokens.length > 1 && tokens.last.length <= 2) {
+    tokens = tokens.sublist(0, tokens.length - 1); // trailing smudge
+  }
+  final name = tokens.join(' ').replaceAll(RegExp(r"^[.'_\-]+|[.'_\-]+$"), '');
+  final letters = RegExp(r'\p{L}', unicode: true).allMatches(name).length;
+  if (name.length < 3 || name.length > 40 || letters < 3 || tokens.length > 6) return null;
+  if (letters < name.replaceAll(' ', '').length * 0.6) return null;
+  if (_notNames.contains(name.toLowerCase()) || _uiWords.hasMatch(name)) return null;
+  return name;
 }
 
 // ---------------------------------------------------------------------------
