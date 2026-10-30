@@ -23,7 +23,8 @@ class PhoneSummary {
   Iterable<PhoneFile> get audio => files.where((f) => f.isAudio);
   Iterable<PhoneFile> get other => files.where((f) => !f.isImage && !f.isVideo && !f.isAudio);
 
-  Iterable<PhoneFile> get hidden => files.where((f) => f.hiddenFromMediaList);
+  /// Worked out once per read: Home shows it on every redraw.
+  late final List<PhoneFile> hidden = files.where((f) => f.hiddenFromMediaList).toList();
 
   static int bytes(Iterable<PhoneFile> fs) => fs.fold(0, (s, f) => s + f.bytes);
 

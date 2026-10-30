@@ -24,13 +24,16 @@ abstract final class Tone {
   static const blank = Color(0xFF1D1B22); // an empty picture frame
 }
 
+/// The one easing curve for every movement in the app.
+const pruneEase = Curves.easeOutCubic;
+
 /// Typed text: reasons, sizes, dates, evidence. One size for every item
 /// fact; rank comes from weight and ink, never size.
 abstract final class Typed {
   static const family = 'Consolas';
-  static const fact = TextStyle(fontFamily: family, fontSize: 12.5, height: 1.35, color: Tone.ink);
+  static const fact = TextStyle(fontFamily: family, fontSize: 13, height: 1.35, color: Tone.ink);
   static TextStyle get factMuted => fact.copyWith(color: Tone.muted);
-  static TextStyle get factBold => fact.copyWith(fontWeight: FontWeight.w700);
+  static TextStyle get factBold => fact.copyWith(fontWeight: FontWeight.w600);
 }
 
 ThemeData pruneTheme() {
@@ -79,7 +82,7 @@ ThemeData pruneTheme() {
         disabledBackgroundColor: Tone.line,
         disabledForegroundColor: Tone.muted,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
@@ -101,12 +104,12 @@ ThemeData pruneTheme() {
     checkboxTheme: CheckboxThemeData(
       fillColor: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected) ? Tone.stamp : Tone.paper),
       side: const BorderSide(color: Tone.muted, width: 1.5),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(color: Tone.stamp, linearTrackColor: Tone.line),
     dialogTheme: DialogThemeData(
       backgroundColor: Tone.paper,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(color: Tone.ink, borderRadius: BorderRadius.circular(4)),
@@ -117,7 +120,7 @@ ThemeData pruneTheme() {
 
 /// A catalog slip: paper with the red top rule, faint ruling between rows.
 class Slip extends StatelessWidget {
-  const Slip({super.key, required this.child, this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 14)});
+  const Slip({super.key, required this.child, this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 12)});
   final Widget child;
   final EdgeInsets padding;
 
@@ -152,7 +155,7 @@ class SlipRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = prose ? const TextStyle(fontSize: 14, height: 1.4, color: Tone.ink) : Typed.fact;
     return Container(
-      padding: EdgeInsets.symmetric(vertical: prose ? 8 : 6),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Tone.ruling)),
       ),
@@ -161,7 +164,7 @@ class SlipRow extends StatelessWidget {
         children: [
           SizedBox(
             width: labelWidth,
-            child: Text(label, style: prose ? style.copyWith(fontWeight: FontWeight.w700) : Typed.factBold),
+            child: Text(label, style: prose ? style.copyWith(fontWeight: FontWeight.w600) : Typed.factBold),
           ),
           Expanded(
             child: selectable ? SelectableText(value, style: style) : Text(value, style: style),
@@ -216,7 +219,7 @@ class CapacityBar extends StatelessWidget {
               Container(width: c.maxWidth * u, color: _stays),
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 420),
-                curve: Curves.easeOutCubic,
+                curve: pruneEase,
                 left: c.maxWidth * (u - p),
                 width: c.maxWidth * p,
                 top: 0,
@@ -265,14 +268,15 @@ class TickBox extends StatelessWidget {
     label: on ? 'Will be removed' : 'Kept',
     child: InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: BorderRadius.circular(4),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
+        curve: pruneEase,
         width: 22,
         height: 22,
         decoration: BoxDecoration(
           color: on ? Tone.stamp : Tone.paper,
-          borderRadius: BorderRadius.circular(3),
+          borderRadius: BorderRadius.circular(4),
           border: Border.all(color: on ? Tone.stamp : Tone.muted, width: 1.5),
         ),
         child: on ? const Icon(Icons.check, size: 16, color: Tone.onStamp) : null,

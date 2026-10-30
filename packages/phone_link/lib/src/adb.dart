@@ -192,8 +192,15 @@ class Adb {
   ///
   /// [parallel] pulls run side by side: one `adb pull` waits on the phone
   /// between files, so two or three at once keep the cable busier.
+  ///
+  /// When [stop] says so, no new batch or file is started; what was copied
+  /// so far is in the report.
   Future<CopyReport> copyManyToLaptop(String serial, List<PhoneFile> files, String Function(PhoneFile) localPathFor,
-      {void Function(int filesDone, int bytesDone)? onProgress, int maxBatch = 60, int parallel = 1}) async {
+      {void Function(int filesDone, int bytesDone)? onProgress,
+      int maxBatch = 60,
+      int parallel = 1,
+      bool Function()? stop}) async {
+    bool stopping() => stop?.call() ?? false;
     final report = CopyReport();
     final staging = await Directory.systemTemp.createTemp('declutter_copy_');
     var filesDone = 0;
@@ -208,6 +215,7 @@ class Adb {
         if (await tmp.exists() && await tmp.length() == f.bytes) {
           try {
             await _moveInto(tmp, localPathFor(f));
+            await keepPhoneDate(File(localPathFor(f)), f);
             report._ok(f);
           } on FileSystemException catch (e) {
             report.failed[f] = '$e'; // e.g. a file already there: never replaced
@@ -244,7 +252,7 @@ class Adb {
       final batches = _batches([for (final f in files) if (isSafeName(f.name)) f], maxBatch);
       var next = 0;
       Future<void> puller() async {
-        while (next < batches.length) {
+        while (next < batches.length && !stopping()) {
           final i = next++;
           await pullBatch(i, batches[i]);
         }
@@ -252,6 +260,7 @@ class Adb {
 
       await Future.wait([for (var k = 0; k < parallel.clamp(1, 8); k++) puller()]);
       for (final f in oneByOne) {
+        if (stopping()) break;
         try {
           await copyToLaptop(serial, f, localPathFor(f));
           report._ok(f);
@@ -340,14 +349,34 @@ class Adb {
       await sink.close();
       if (code != 0) throw _failure(await errors, code);
       if (file.bytes > 0 && received != file.bytes) {
-        throw PhoneDisconnected('copy of ${file.name} stopped at $received of ${file.bytes} bytes');
+        // A pulled cable, or only this file changed or went away meanwhile
+        // (deleted on the phone mid-check). Asking the phone tells them
+        // apart: if it doesn't answer, this throws PhoneDisconnected; if it
+        // does, only this one file failed and the rest carry on.
+        await shell(serial, 'stat -c %s ${shellQuote(file.path)}').catchError((Object e) {
+          if (e is PhoneDisconnected) throw e;
+          return '';
+        });
+        throw ProcessException(adbPath, const [], '${file.name} changed or was removed while it was being copied', 1);
       }
       ensureFree(localPath);
-      await part.rename(localPath);
+      await keepPhoneDate(await part.rename(localPath), file);
     } catch (_) {
       await sink.close().catchError((_) {});
       if (await part.exists()) await part.delete();
       rethrow;
+    }
+  }
+
+  /// Gives a laptop copy the phone file's date, so a copy pushed back (Undo)
+  /// lands with its old date and sits where it was in the gallery, instead
+  /// of jumping to the top as "new".
+  static Future<void> keepPhoneDate(File local, PhoneFile f) async {
+    if (f.modifiedSec <= 0) return;
+    try {
+      await local.setLastModified(DateTime.fromMillisecondsSinceEpoch(f.modifiedSec * 1000));
+    } on FileSystemException {
+      // The copy itself is fine; only its date is today's.
     }
   }
 
@@ -388,7 +417,10 @@ class Adb {
 
   Exception _failure(String stderr, int code) {
     final msg = stderr.trim();
-    if (msg.contains('not found') || msg.contains('no devices') || msg.contains('offline')) {
+    // Only adb's own words for a missing phone. A plain "not found" can be
+    // about one file, and must not stop everything as a lost phone.
+    if (RegExp(r"no devices|device offline|device '[^']*' not found|device not found|error: closed")
+        .hasMatch(msg.toLowerCase())) {
       return PhoneDisconnected(msg);
     }
     return ProcessException(adbPath, const [], msg, code);

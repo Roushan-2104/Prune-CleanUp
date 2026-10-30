@@ -113,7 +113,7 @@ class _FileThumbState extends State<FileThumb> {
               ? Icon(iconFor(file), color: c.onSurfaceVariant)
               : Padding(
                   // A page or an icon: shown whole, never cropped.
-                  padding: EdgeInsets.all(fill ? 10 : 4),
+                  padding: EdgeInsets.all(fill ? 12 : 4),
                   child: Image.memory(snap.data!, fit: BoxFit.contain, cacheWidth: cache, gaplessPlayback: true),
                 ),
         ),
@@ -532,7 +532,7 @@ class MediaViewState extends State<MediaView> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: c.onSurface,
                   side: BorderSide(color: c.onSurface),
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 ),
                 onPressed: play,
                 icon: const Icon(Icons.play_arrow),
@@ -559,7 +559,7 @@ class MediaViewState extends State<MediaView> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.only(bottom: 16),
             child: OutlinedButton.icon(
               onPressed: _openInWindows,
               icon: const Icon(Icons.open_in_new),
@@ -616,7 +616,7 @@ class _NoPreview extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             icon,
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(note, textAlign: TextAlign.center, style: TextStyle(color: c.onSurfaceVariant)),
           ],
         ),

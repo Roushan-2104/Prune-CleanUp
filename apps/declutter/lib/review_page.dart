@@ -338,7 +338,7 @@ class _ReviewPageState extends State<ReviewPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox.square(dimension: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
+                    const SizedBox.square(dimension: 24, child: CircularProgressIndicator(strokeWidth: 2.5)),
                     const SizedBox(height: 16),
                     Text(
                       widget.session.readingStep.isEmpty ? 'Reading the phone again…' : widget.session.readingStep,
@@ -360,7 +360,7 @@ class _ReviewPageState extends State<ReviewPage> {
             top,
             const Expanded(
               child: Center(
-                child: Text('Nothing left to suggest on this phone.', style: TextStyle(color: Tone.muted)),
+                child: Text('Nothing left to suggest on this phone', style: TextStyle(color: Tone.muted)),
               ),
             ),
           ],
@@ -444,7 +444,7 @@ class _Rail extends StatelessWidget {
     final biggest = sizes.values.fold(1, math.max);
 
     Widget heading(String text) => Padding(
-      padding: const EdgeInsets.fromLTRB(12, 18, 12, 6),
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 8),
       child: Text(
         text,
         style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Tone.muted),
@@ -459,7 +459,7 @@ class _Rail extends StatelessWidget {
       child: ListenableBuilder(
         listenable: state.selection,
         builder: (context, _) => ListView(
-          padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
           children: [
             if (sure.isNotEmpty) heading('Sure to remove'),
             for (final c in sure) _RailEntry(state: state, category: c, bytes: sizes[c]!, biggest: biggest),
@@ -492,7 +492,7 @@ class _RailEntry extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         onTap: () => state.show(category),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -508,7 +508,7 @@ class _RailEntry extends StatelessWidget {
                   Text(formatBytes(bytes), style: Typed.factMuted),
                 ],
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 4),
               Row(
                 children: [
                   Expanded(
@@ -517,14 +517,14 @@ class _RailEntry extends StatelessWidget {
                       // Ink, not red: red reads as a warning in a deletion app.
                       // Groups under 5% of the biggest get no bar (it would be a stray dot).
                       child: share < 0.05
-                          ? const SizedBox(height: 3)
+                          ? const SizedBox(height: 4)
                           : FractionallySizedBox(
                               widthFactor: share,
                               child: Container(height: 3, color: on ? Tone.ink : Tone.muted.withValues(alpha: 0.45)),
                             ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Text(
                     picked == 0
                         ? formatCount(items.length)
@@ -593,7 +593,7 @@ class _Group extends StatelessWidget {
                             children: [
                               Text(
                                 category.label,
-                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.3),
+                                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -736,19 +736,19 @@ class _GroupHeader extends StatelessWidget {
       child: InkWell(
         onTap: onToggle,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+          padding: const EdgeInsets.fromLTRB(0, 12, 0, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Icon(open ? Icons.expand_more : Icons.chevron_right, size: 22, color: Tone.ink),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 8),
                   if (kept != null) ...[
                     Container(
                       decoration: BoxDecoration(
                         border: Border.all(color: Tone.ink, width: 1.5),
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: BorderRadius.circular(4),
                       ),
                       child: FileThumb(file: kept, media: state.media, size: 40),
                     ),
@@ -757,7 +757,7 @@ class _GroupHeader extends StatelessWidget {
                   Flexible(
                     child: Text(
                       kept != null ? 'Keeping ${displayName(kept.name)}' : (group ?? 'Other'),
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -789,7 +789,7 @@ class _GroupHeader extends StatelessWidget {
                           opacity: state.selection.has(e.key) ? 1 : 0.55,
                           child: FileThumb(file: state.byPath[e.key]!, media: state.media, size: 52),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                       ],
                       if (members.length > _previews)
                         Text('+${formatCount(members.length - _previews)} more', style: Typed.factMuted),
@@ -820,7 +820,7 @@ class _Card extends StatelessWidget {
     return Material(
       color: Tone.paper,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(3),
+        borderRadius: BorderRadius.circular(4),
         // Ink, not violet: violet only ever means "will be removed".
         side: BorderSide(color: focused ? Tone.ink : Tone.line, width: focused ? 2 : 1),
       ),
@@ -832,7 +832,7 @@ class _Card extends StatelessWidget {
           children: [
             Container(height: 3, color: Tone.rule),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
               child: SizedBox(
                 height: 180,
                 child: Stack(
@@ -851,18 +851,18 @@ class _Card extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: Tooltip(
                 message: displayName(f.name),
                 child: Text(displayName(f.name), style: Typed.factBold, maxLines: 1, overflow: TextOverflow.ellipsis),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
               child: Text(shortReason(v), style: Typed.fact, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 0),
               child: Row(
                 children: [
                   Expanded(child: Text(formatBytes(f.bytes), style: Typed.factMuted)),
@@ -932,15 +932,15 @@ class _Detail extends StatelessWidget {
     // Full panel width, one above the other: side by side they'd be too
     // small to tell which of two near-identical photos is sharper.
     Widget side(String label, PhoneFile file, {required bool keep}) => Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: keep ? Tone.ink : Tone.stamp),
+            style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: keep ? Tone.ink : Tone.stamp),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: keep ? Tone.ink : Tone.stamp, width: 2),
@@ -948,7 +948,7 @@ class _Detail extends StatelessWidget {
             ),
             child: MediaView(file: file, media: state.media, height: 280),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(displayName(file.name), style: Typed.fact, overflow: TextOverflow.ellipsis),
           Text('${formatBytes(file.bytes)} · ${shortDate(file.modifiedSec)}', style: Typed.factMuted),
         ],
@@ -960,7 +960,7 @@ class _Detail extends StatelessWidget {
       builder: (context, _) {
         final on = state.selection.has(entry.key);
         return ListView(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 28),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 28),
           children: [
             Text(
               displayName(f.name),
@@ -972,7 +972,7 @@ class _Detail extends StatelessWidget {
               style: const TextStyle(fontSize: 12, color: Tone.muted),
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             if (match != null) ...[
               side('Keeping', match, keep: true),
               side(on ? 'Removing this copy' : 'This copy, kept', f, keep: !on),
@@ -987,7 +987,7 @@ class _Detail extends StatelessWidget {
                 ),
               ],
             ],
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Material(
               color: on ? Tone.stampTint : Tone.desk,
               borderRadius: BorderRadius.circular(4),
@@ -1025,8 +1025,8 @@ class _Detail extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('How we know', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 6),
+                  const Text('How we know', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
                   for (final (i, r) in v.reasons.where((r) => !r.startsWith('Screenshot saved or received')).indexed)
                     SlipRow(i == 0 ? 'Why' : '', r),
                   for (final MapEntry(key: k, value: val) in v.evidence.entries) SlipRow(k, val),

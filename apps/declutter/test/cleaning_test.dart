@@ -118,6 +118,7 @@ void main() {
       final runner = CleanRunner(store: store, adb: adb, serial: emu!, phoneLabel: 'virtual-test');
       final items = files.where((f) => seeded.contains(f.path)).toList();
       final sizes = {for (final f in items) f.path: f.bytes};
+      final dates = {for (final p in seeded) p: '${(await sh("stat -c %Y '$p'")).stdout}'.trim()};
       final result = await runner.run(CleanPlan(items), backup: true);
       expect(result.failed, isEmpty);
       expect(result.done, seeded.length);
@@ -138,19 +139,65 @@ void main() {
       expect(againFound.keys.where((p) => p.contains('.trashed-')), isEmpty);
 
       // 3. Undo puts everything back, byte for byte.
-      expect(await runner.undo(result.session), seeded.length);
+      expect(await runner.undo(result.session!), seeded.length);
       final after = {for (final f in await adb.listAllFiles(emu!)) f.path: f.bytes};
       for (final p in seeded) {
         expect(after[p], sizes[p], reason: '$p restored with the same size');
+        expect('${(await sh("stat -c %Y '$p'")).stdout}'.trim(), dates[p], reason: '$p keeps its date');
       }
-      expect(store.opsOf(result.session).every((o) => o.state == OpState.restored), isTrue);
+      expect(store.opsOf(result.session!).every((o) => o.state == OpState.restored), isTrue);
 
       // Laptop backups are cleaned up by the test (the app keeps them).
-      for (final o in store.opsOf(result.session)) {
+      for (final o in store.opsOf(result.session!)) {
         if (o.backup case final b? when File(b).existsSync()) File(b).deleteSync();
       }
       final testFolder = Directory('$backupRoot\\virtual-test');
       if (testFolder.existsSync()) testFolder.deleteSync(recursive: true);
     }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('cancel midway puts everything back, with the same sizes and dates', () async {
+      if (skipReason != null) return markTestSkipped(skipReason!);
+      Future<String> sizeAndDate(String p) async => '${(await sh("stat -c '%s %Y' '$p'")).stdout}'.trim();
+
+      final files = await adb.listAllFiles(emu!);
+      final items = files.where((f) => seeded.contains(f.path)).toList();
+      expect(items.length, seeded.length, reason: 'the seeded files are back from the first test');
+      final before = {for (final p in seeded) p: await sizeAndDate(p)};
+
+      final store = Store.inMemory()..rememberPhone(emu!, await adb.info(emu!));
+      final runner = CleanRunner(store: store, adb: adb, serial: emu!, phoneLabel: 'virtual-cancel-test', batch: 1);
+      final result = await runner.run(CleanPlan(items), backup: true, onProgress: (step, _) {
+        if (step.startsWith('Cleaning… 2 of')) runner.cancel(); // pressed while item 2 is cleaned
+      });
+
+      expect(result.cancelled, isTrue);
+      expect(result.putBack, 2, reason: 'both cleaned items came back');
+      expect(result.done, 0, reason: 'nothing is left removed');
+      for (final p in seeded) {
+        expect(await sizeAndDate(p), before[p], reason: '$p is back with the same size and date');
+      }
+      final ops = store.opsOf(result.session!);
+      expect(ops.where((o) => o.state == OpState.planned), isEmpty, reason: 'nothing left pending in the journal');
+      expect(ops.where((o) => o.state == OpState.restored).length, 2);
+      expect(ops.where((o) => o.error == notCleanedCancelled).length, seeded.length - 2);
+      expect(Directory('$backupRoot\\virtual-cancel-test').existsSync(), isFalse,
+          reason: 'backups no longer needed are removed');
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('cancel while backing up changes nothing and leaves no backups', () async {
+      if (skipReason != null) return markTestSkipped(skipReason!);
+      final files = await adb.listAllFiles(emu!);
+      final items = files.where((f) => seeded.contains(f.path)).toList();
+      final store = Store.inMemory()..rememberPhone(emu!, await adb.info(emu!));
+      final runner = CleanRunner(store: store, adb: adb, serial: emu!, phoneLabel: 'virtual-cancel-test');
+      runner.cancel(); // pressed before the first batch finished
+      final result = await runner.run(CleanPlan(items), backup: true);
+      expect(result.cancelled, isTrue);
+      expect(result.session, isNull, reason: 'the phone was never touched');
+      for (final p in seeded) {
+        expect((await sh("ls '$p'")).exitCode, 0, reason: '$p untouched');
+      }
+      expect(Directory('$backupRoot\\virtual-cancel-test').existsSync(), isFalse);
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }

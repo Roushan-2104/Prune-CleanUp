@@ -130,7 +130,7 @@ class _Header extends StatelessWidget {
           children: [
             IconButton(tooltip: 'Back (Esc)', icon: const Icon(Icons.arrow_back, color: Tone.ink), onPressed: onBack),
             const SizedBox(width: 8),
-            const Text('Accuracy check', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text('Accuracy check', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
             const SizedBox(width: 24),
             if (!finished && total > 0) ...[
               SizedBox(
@@ -179,11 +179,11 @@ class _Question extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (match != null) ...[
-                      const Text('Kept', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Text('Kept', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       MediaView(file: match, media: media, height: 220),
                       const SizedBox(height: 12),
-                      const Text('Prune would remove this copy', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const Text('Prune would remove this copy', style: TextStyle(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       MediaView(file: file, media: media, height: 220),
                     ] else
@@ -197,20 +197,20 @@ class _Question extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(v.label ?? v.category.label, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+                    Text(v.label ?? v.category.label, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     SelectableText(displayName(file.name), style: Typed.factBold),
                     Text(file.folder, style: const TextStyle(fontSize: 12, color: Tone.muted)),
                     Text('${formatBytes(file.bytes)} · ${shortDate(file.modifiedSec)}', style: Typed.factMuted),
                     const SizedBox(height: 8),
                     Text(shortReason(v), style: Typed.fact),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     const Text('Should this go?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    const Text('Answer as if you were cleaning your own phone.', style: TextStyle(color: Tone.muted)),
+                    const Text('Answer as if you were cleaning your own phone', style: TextStyle(color: Tone.muted)),
                     const SizedBox(height: 16),
                     FilledButton(onPressed: () => onAnswer(_Answer.right), child: const Text('Yes, remove it  (Y)')),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 12),
                     OutlinedButton(
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Tone.ink,
@@ -220,7 +220,7 @@ class _Question extends StatelessWidget {
                       onPressed: () => onAnswer(_Answer.wrong),
                       child: const Text('No, I\'d keep it  (N)'),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         TextButton(onPressed: () => onAnswer(_Answer.unsure), child: const Text('Not sure, skip  (S)')),
@@ -228,12 +228,12 @@ class _Question extends StatelessWidget {
                         TextButton(onPressed: onFinish, child: const Text('Finish now  (Esc)')),
                       ],
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     Slip(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('How we know', style: TextStyle(fontWeight: FontWeight.w700)),
+                          const Text('How we know', style: TextStyle(fontWeight: FontWeight.w600)),
                           for (final MapEntry(key: k, value: val) in v.evidence.entries) SlipRow(k, val),
                         ],
                       ),
@@ -284,7 +284,7 @@ class _Results extends StatelessWidget {
             children: [
               Text(
                 total == 0 ? 'No answers yet' : 'Prune was right ${pct(right, total)} of the time',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.4),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               Text(
@@ -294,7 +294,7 @@ class _Results extends StatelessWidget {
                         'Where a group scores lower, untick it in Review and check those items one by one.',
                 style: const TextStyle(color: Tone.muted, height: 1.5),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
               if (rows.isNotEmpty)
                 Slip(
                   child: Column(
@@ -304,7 +304,7 @@ class _Results extends StatelessWidget {
                     ],
                   ),
                 ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   OutlinedButton.icon(

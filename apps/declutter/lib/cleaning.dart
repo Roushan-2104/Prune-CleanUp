@@ -22,8 +22,15 @@ class CleanPlan {
 }
 
 class CleanResult {
-  CleanResult(this.session, this.done, this.failed, this.bytesFreed, {this.stoppedBy});
-  final int session;
+  CleanResult(this.session, this.done, this.failed, this.bytesFreed,
+      {this.stoppedBy, this.cancelled = false, this.putBack = 0});
+
+  /// The journal entry, or null when it was cancelled before the phone was
+  /// touched.
+  final int? session;
+
+  /// Items removed from the phone (after a cancel: the ones that could not
+  /// be put back).
   final int done;
   final Map<String, String> failed; // path → why
   final int bytesFreed;
@@ -31,12 +38,48 @@ class CleanResult {
   /// Why the clean-up stopped before the end (a pulled cable), or null if
   /// it ran to the end. What was already done can still be undone.
   final Object? stoppedBy;
+
+  /// Cancelled by the user: what was already cleaned was put back.
+  final bool cancelled;
+
+  /// After a cancel, how many cleaned items were put back.
+  final int putBack;
 }
 
 /// Why Undo kept an item where it is: a newer file now sits at its place
 /// on the phone. Saved in the journal, so "Undo last clean-up" can leave
 /// these out instead of offering them again and again.
 const keptNewerFile = 'A newer file is in its place. The backup is still on this laptop.';
+
+/// Why an item of a cancelled clean-up was never touched.
+const notCleanedCancelled = 'Not cleaned: the clean-up was cancelled.';
+
+/// Removes laptop backups that aren't needed any more, then the folders
+/// they leave empty inside "Prune Backups". Folders holding anything else
+/// (another clean-up's backups) stay.
+void dropBackups(Iterable<String> paths) {
+  final root = backupRoot.toLowerCase();
+  final folders = <String>{};
+  for (final p in paths) {
+    if (!p.toLowerCase().startsWith('$root\\')) continue; // only ever our own folder
+    final f = File(p);
+    try {
+      if (f.existsSync()) f.deleteSync();
+    } on FileSystemException {
+      continue;
+    }
+    for (var d = f.parent; d.path.length > backupRoot.length && d.path.toLowerCase().startsWith(root); d = d.parent) {
+      folders.add(d.path);
+    }
+  }
+  for (final d in folders.toList()..sort((a, b) => b.length.compareTo(a.length))) {
+    try {
+      Directory(d).deleteSync(); // not recursive: only if empty
+    } on FileSystemException {
+      // still holds something: kept
+    }
+  }
+}
 
 /// %USERPROFILE%\Prune Backups
 String get backupRoot =>
@@ -83,7 +126,13 @@ class CleanRunner {
     required this.serial,
     required this.phoneLabel,
     this.allowRealPhone = false,
+    this.batch = 32,
   });
+
+  /// Items changed per step. Each step runs several changes side by side
+  /// on the phone (one at a time took about a second per file); Cancel is
+  /// checked between steps.
+  final int batch;
 
   final Store store;
   final Adb adb;
@@ -98,6 +147,14 @@ class CleanRunner {
   /// Throws [RealPhoneLocked] for a real phone unless [allowRealPhone].
   late final PhoneCleaner cleaner = PhoneCleaner(adb.adbPath, serial, allowRealPhone: allowRealPhone);
 
+  var _cancelled = false;
+
+  /// Asks a running clean-up to stop. It stops after the step it is on,
+  /// never in the middle of a file, then puts back everything it already
+  /// cleaned (see [run]).
+  void cancel() => _cancelled = true;
+
+  /// Progress below 0 means "no fraction to show" (putting back after a cancel).
   Future<CleanResult> run(CleanPlan plan, {required bool backup, void Function(String step, double progress)? onProgress}) async {
     await cleaner.confirmVirtualPhone(); // fail fast on the safety lock, before any copying
     final items = [...plan.toTrash, ...plan.toDelete];
@@ -106,18 +163,33 @@ class CleanRunner {
     if (backup) {
       onProgress?.call('Backing up ${items.length} files to this laptop…', 0);
       final targets = backupPathsFor(phoneLabel, items);
-      final report = await adb.copyManyToLaptop(serial, items, (f) => targets[f.path]!,
-          onProgress: (n, _) => onProgress?.call('Backing up… $n of ${items.length}', 0.5 * n / items.length));
-      for (final f in report.copied) {
-        backups[f.path] = targets[f.path]!;
+      try {
+        final report = await adb.copyManyToLaptop(serial, items, (f) => targets[f.path]!,
+            onProgress: (n, _) => onProgress?.call('Backing up… $n of ${items.length}', 0.5 * n / items.length),
+            stop: () => _cancelled);
+        for (final f in report.copied) {
+          backups[f.path] = targets[f.path]!;
+        }
+      } on PhoneDisconnected {
+        // Nothing on the phone was changed yet; the partial copies go.
+        dropBackups(targets.values);
+        rethrow;
       }
+    }
+    if (_cancelled) {
+      // Cancelled while backing up: the phone was never changed, and the
+      // copies made so far aren't needed.
+      dropBackups(backups.values);
+      return CleanResult(null, 0, const {}, 0, cancelled: true);
     }
 
     // Hidden files can't go to the phone's Trash: with backup on, only the
     // ones that were actually backed up are deleted.
     final deletable = backup ? plan.toDelete.where((f) => backups.containsKey(f.path)).toList() : plan.toDelete;
     final skipped = {
-      for (final f in plan.toDelete.where((f) => !deletable.contains(f))) f.path: 'Not deleted, because its backup to this laptop didn\'t finish.',
+      if (backup)
+        for (final f in plan.toDelete)
+          if (!backups.containsKey(f.path)) f.path: 'Not deleted, because its backup to this laptop didn\'t finish.',
     };
 
     final session = store.startSession(serial);
@@ -146,26 +218,77 @@ class CleanRunner {
     var done = 0, freed = 0;
     Object? stoppedBy;
     final failed = <String, String>{...skipped};
-    for (final (i, (f, method)) in work.indexed) {
-      onProgress?.call('Cleaning… ${i + 1} of ${work.length}', 0.5 + 0.5 * (i + 1) / work.length);
+    for (var start = 0; start < work.length; start += batch) {
+      if (_cancelled) {
+        // Never started: recorded as left in place, so nothing is pending.
+        for (final id in ids.skip(start)) {
+          store.markOp(id, OpState.failed, error: notCleanedCancelled);
+        }
+        break;
+      }
+      final end = (start + batch).clamp(0, work.length);
+      final part = work.sublist(start, end);
+      onProgress?.call('Cleaning… $end of ${work.length}', 0.5 + 0.5 * end / work.length);
+      Map<String, Object> refused;
       try {
-        method == CleanMethod.trash ? await cleaner.moveToTrash(f) : await cleaner.deleteForever(f);
-        store.markOp(ids[i], OpState.done);
-        done++;
-        freed += f.bytes;
+        refused = {
+          ...await cleaner.moveManyToTrash([for (final (f, m) in part) if (m == CleanMethod.trash) f]),
+          ...await cleaner.deleteManyForever([for (final (f, m) in part) if (m == CleanMethod.delete) f]),
+        };
       } on PhoneDisconnected catch (e) {
-        // The rest stay 'planned' in the journal and are settled when the
-        // phone is next read (see [settleUnfinished]). What was done so far
-        // is recorded below, so it can still be undone.
+        // This step and the rest stay 'planned' in the journal and are
+        // settled when the phone is next read (see [settleUnfinished]).
+        // What was done before is recorded below, so it can be undone.
         stoppedBy = e;
         break;
       } catch (e) {
-        store.markOp(ids[i], OpState.failed, error: '$e'); // full detail, kept on this laptop
-        failed[f.path] = friendlyError(e);
+        refused = {for (final (f, _) in part) f.path: e};
+      }
+      for (final (j, (f, _)) in part.indexed) {
+        if (refused[f.path] case final e?) {
+          store.markOp(ids[start + j], OpState.failed, error: '$e'); // full detail, kept on this laptop
+          failed[f.path] = friendlyError(e);
+        } else {
+          store.markOp(ids[start + j], OpState.done);
+          done++;
+          freed += f.bytes;
+        }
       }
     }
     store.finishSession(session, itemsRemoved: done, bytesFreed: freed);
-    return CleanResult(session, done, failed, freed, stoppedBy: stoppedBy);
+    if (!_cancelled || stoppedBy != null) return CleanResult(session, done, failed, freed, stoppedBy: stoppedBy);
+    return _putBackAfterCancel(session, backups, onProgress);
+  }
+
+  /// Puts back everything a cancelled clean-up already cleaned, the same way
+  /// Undo does, then records the clean-up as what is still removed (usually
+  /// nothing). Laptop copies of items that are back on the phone, or that
+  /// were never cleaned, are removed; copies of anything still missing stay.
+  Future<CleanResult> _putBackAfterCancel(
+      int session, Map<String, String> backups, void Function(String step, double progress)? onProgress) async {
+    var back = 0;
+    Object? stoppedBy;
+    try {
+      back = await undo(session, onProgress: (s) => onProgress?.call(s, -1));
+    } on PhoneDisconnected catch (e) {
+      stoppedBy = e; // the rest can be put back with "Undo last clean-up"
+    }
+    final ops = store.opsOf(session);
+    final still = ops.where((o) => o.state == OpState.done).toList();
+    final freed = still.fold(0, (s, o) => s + o.bytes);
+    store.finishSession(session, itemsRemoved: still.length, bytesFreed: freed);
+    final keep = {for (final o in still) o.path};
+    dropBackups([for (final e in backups.entries) if (!keep.contains(e.key)) e.value]);
+    return CleanResult(session, still.length,
+        {
+          for (final o in still)
+            o.path: o.error ??
+                (o.method == CleanMethod.delete && o.backup == null
+                    ? 'Deleted without a backup, so it can\'t come back.'
+                    : 'Couldn\'t be put back yet. "Undo last clean-up" tries again.'),
+        },
+        freed,
+        stoppedBy: stoppedBy, cancelled: true, putBack: back);
   }
 
   /// Settles what an interrupted clean-up (pulled cable, closed app) left
@@ -224,26 +347,54 @@ class CleanRunner {
     }
     var back = 0;
     final ops = store.opsOf(session).where((o) => o.state == OpState.done).toList();
-    for (final (i, op) in ops.indexed) {
-      onProgress?.call('Putting back ${i + 1} of ${ops.length}…');
+    for (var start = 0; start < ops.length; start += batch) {
+      final part = ops.sublist(start, (start + batch).clamp(0, ops.length));
+      onProgress?.call('Putting back ${start + part.length} of ${ops.length}…');
+
+      // Out of the Trash, several side by side.
+      final fromTrash = [for (final op in part) if (op.method == CleanMethod.trash) op];
+      Map<String, CleanError> notBack;
       try {
-        if (op.method == CleanMethod.trash) {
-          await cleaner.restoreFromTrash(PhoneFile(id: op.mediaId, path: op.path, folder: '', bytes: op.bytes, mime: '', modifiedSec: 0));
-        } else if (op.backup != null) {
-          await cleaner.putBack(op.backup!, op.path, index: !op.path.contains('/Android/media/'));
-        } else {
-          continue; // deleted without a backup: cannot come back
-        }
-        store.markOp(op.id, OpState.restored);
-        back++;
+        notBack = await cleaner.restoreManyFromTrash([
+          for (final op in fromTrash)
+            PhoneFile(id: op.mediaId, path: op.path, folder: '', bytes: op.bytes, mime: '', modifiedSec: 0),
+        ]);
       } on PhoneDisconnected {
         rethrow;
-      } on PlaceTaken {
-        // Something newer is there now; it is kept, and so is the backup.
-        store.markOp(op.id, OpState.done, error: keptNewerFile);
-        onSkipped?.call(op.path, keptNewerFile);
+      } catch (e) {
+        notBack = {for (final op in fromTrash) op.path: CleanError('$e')}; // left as 'done'; shown as not restored
+      }
+      for (final op in fromTrash.where((op) => !notBack.containsKey(op.path))) {
+        store.markOp(op.id, OpState.restored);
+        back++;
+      }
+
+      // Copied back from the laptop one by one (fast), then listed in the
+      // gallery side by side (slow one at a time).
+      final toIndex = <String>[];
+      for (final op in part.where((op) => op.method != CleanMethod.trash && op.backup != null)) {
+        try {
+          await cleaner.putBack(op.backup!, op.path, index: false);
+          if (!op.path.contains('/Android/media/')) toIndex.add(op.path);
+          store.markOp(op.id, OpState.restored);
+          back++;
+        } on PhoneDisconnected {
+          rethrow;
+        } on PlaceTaken {
+          // Something newer is there now; it is kept, and so is the backup.
+          store.markOp(op.id, OpState.done, error: keptNewerFile);
+          onSkipped?.call(op.path, keptNewerFile);
+        } catch (_) {
+          // leave as 'done'; shown as not restored
+        }
+      }
+      // Deleted without a backup: cannot come back, stays 'done'.
+      try {
+        await cleaner.indexMany(toIndex);
+      } on PhoneDisconnected {
+        rethrow;
       } catch (_) {
-        // leave as 'done'; shown as not restored
+        // The files are back; the gallery lists them on its own later.
       }
     }
     return back;

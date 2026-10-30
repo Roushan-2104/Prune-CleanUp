@@ -33,6 +33,7 @@ class _CleanDialogState extends State<_CleanDialog> {
   var understood = false;
   var step = '';
   var progress = 0.0;
+  var cancelling = false;
   CleanResult? result;
   int restored = 0;
   int kept = 0;
@@ -72,6 +73,14 @@ class _CleanDialogState extends State<_CleanDialog> {
     widget.session.rescan();
   }
 
+  void _cancel() {
+    runner.cancel();
+    setState(() {
+      cancelling = true;
+      step = 'Stopping after this item…';
+    });
+  }
+
   Future<void> _undo() async {
     setState(() {
       stage = _Stage.undoing;
@@ -80,9 +89,9 @@ class _CleanDialogState extends State<_CleanDialog> {
     });
     // Counted from the journal, so items put back before a pulled cable
     // still count when Undo is pressed again.
-    int putBack() => widget.session.store.opsOf(result!.session).where((o) => o.state == OpState.restored).length;
+    int putBack() => widget.session.store.opsOf(result!.session!).where((o) => o.state == OpState.restored).length;
     try {
-      await runner.undo(result!.session,
+      await runner.undo(result!.session!,
           onProgress: (s) => setState(() => step = s), onSkipped: (_, _) => kept++);
     } on PhoneDisconnected catch (e) {
       // Nothing is lost: plug the phone back in and press Undo again.
@@ -108,8 +117,8 @@ class _CleanDialogState extends State<_CleanDialog> {
     return AlertDialog(
       title: Text(switch (stage) {
         _Stage.confirm => 'Clean ${p.toTrash.length + p.toDelete.length} items · ${formatBytes(p.bytes)}?',
-        _Stage.running => 'Cleaning…',
-        _Stage.done => error == null ? 'Done' : 'Stopped',
+        _Stage.running => cancelling ? 'Cancelling…' : 'Cleaning…',
+        _Stage.done => result?.cancelled == true ? 'Cancelled' : (error == null ? 'Done' : 'Stopped'),
         _Stage.undoing => 'Putting things back…',
         _Stage.undone => 'Undone',
       }),
@@ -144,11 +153,27 @@ class _CleanDialogState extends State<_CleanDialog> {
               Text('Nothing on the phone changes until you press Clean.', style: t.bodySmall),
             ]),
           _Stage.running || _Stage.undoing => Column(mainAxisSize: MainAxisSize.min, children: [
-              LinearProgressIndicator(value: stage == _Stage.running ? progress : null),
+              LinearProgressIndicator(value: stage == _Stage.running && progress >= 0 ? progress : null),
               const SizedBox(height: 12),
               Text(step),
               const SizedBox(height: 8),
-              Text('Every step is recorded. If the cable comes out, Undo still works.', style: t.bodySmall),
+              Text(
+                  stage == _Stage.running && !cancelling
+                      ? 'Cancel stops after the current item and puts back everything cleaned so far.'
+                      : 'Every step is recorded. If the cable comes out, Undo still works.',
+                  style: t.bodySmall),
+            ]),
+          _Stage.done when result?.cancelled == true =>
+            Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                  result!.session == null
+                      ? 'Nothing on the phone was changed'
+                      : result!.done == 0
+                          ? 'Everything is back where it was${result!.putBack > 0 ? ': put back ${_items(result!.putBack)}' : ''}'
+                          : 'Put back ${_items(result!.putBack)}. ${_items(result!.done)} could not be: '
+                              '${result!.failed.values.first}',
+                  style: t.titleMedium),
+              if (error != null) Text(error!, style: TextStyle(color: c.error)),
             ]),
           _Stage.done => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               if (result != null) ...[
@@ -170,7 +195,8 @@ class _CleanDialogState extends State<_CleanDialog> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             FilledButton(onPressed: canStart ? _run : null, child: Text('Clean ${formatBytes(p.bytes)}')),
           ],
-        _Stage.running || _Stage.undoing => const [],
+        _Stage.running => [TextButton(onPressed: cancelling ? null : _cancel, child: Text(cancelling ? 'Cancelling…' : 'Cancel'))],
+        _Stage.undoing => const [],
         _Stage.done => [
             if (result != null && result!.done > 0) TextButton(onPressed: _undo, child: const Text('Undo')),
             FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
@@ -320,9 +346,9 @@ class _UndoDialogState extends State<_UndoDialog> {
                     'Anything left in the Trash for more than 30 days may already be gone.'),
               if (u.fromBackup > 0)
                 _Line(Icons.laptop_outlined, '${u.fromBackup} are copied back from this laptop',
-                    'From the backup in "Prune Backups".'),
+                    'From the backup in "Prune Backups"'),
               const SizedBox(height: 8),
-              Text('Nothing on the phone changes until you press Put back.', style: t.bodySmall),
+              Text('Nothing on the phone changes until you press Put back', style: t.bodySmall),
             ]),
           _UndoStage.undoing => Column(mainAxisSize: MainAxisSize.min, children: [
               const LinearProgressIndicator(),

@@ -27,7 +27,7 @@ class TopBar extends StatelessWidget {
       child: Row(
         children: [
           if (leading != null) ...[leading!, const SizedBox(width: 8)],
-          const Text('Prune', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+          const Text('Prune', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
           const SizedBox(width: 12),
           const _ReadOnly(),
           if (info != null) ...[
@@ -44,7 +44,7 @@ class TopBar extends StatelessWidget {
                     // Built from "free" alone so the figures always add up
                     // (Android reserves some space that is neither used nor free).
                     CapacityBar(total: info.totalBytes, used: info.totalBytes - info.freeBytes, picked: picked),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     Text.rich(
                       TextSpan(
                         children: [

@@ -29,7 +29,7 @@ class UpdateBar extends StatelessWidget {
               style: FilledButton.styleFrom(
                 backgroundColor: Tone.ink,
                 foregroundColor: Tone.desk,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
               onPressed: () => check.allow(true),
               child: const Text('Yes, check'),
@@ -47,7 +47,7 @@ class UpdateBar extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: Tone.ink,
               foregroundColor: Tone.desk,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             onPressed: () => openInBrowser(url),
             child: const Text('Get it'),
@@ -74,7 +74,7 @@ class _Line extends StatelessWidget {
     child: Row(
       children: [
         Icon(icon, size: 18, color: Tone.muted),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(child: Text(text, style: const TextStyle(fontSize: 13, height: 1.4))),
         const SizedBox(width: 12),
         for (final (i, a) in actions.indexed) ...[if (i > 0) const SizedBox(width: 8), a],

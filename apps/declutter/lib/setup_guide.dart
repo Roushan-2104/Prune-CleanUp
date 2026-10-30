@@ -40,18 +40,18 @@ class _SetupGuideState extends State<SetupGuide> {
             children: [
               Text(
                 asking ? 'Allow this laptop on your phone' : 'Connect your Android phone',
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.4),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
               ),
               if (!asking) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 const Text(
                   'Your phone is hiding gigabytes. Prune finds them, and shows proof for every pick.',
-                  style: TextStyle(fontSize: 15, color: Tone.muted, height: 1.4),
+                  style: TextStyle(fontSize: 16, color: Tone.muted, height: 1.4),
                 ),
               ],
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               _Status(look: asking ? null : s.onUsb),
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
               if (asking)
                 const _Steps(
                   steps: [
@@ -83,10 +83,10 @@ class _SetupGuideState extends State<SetupGuide> {
                 ),
                 const SizedBox(height: 16),
                 _Steps(steps: [...brand.steps, ..._plugIn]),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text('Menu names can differ a little between versions.', style: Typed.factMuted),
               ],
-              const SizedBox(height: 22),
+              const SizedBox(height: 24),
               const _WhySafe(),
             ],
           ),
@@ -118,7 +118,7 @@ class _Status extends StatelessWidget {
       UsbLook.unknown => (Icons.search, 'Waiting for your phone…'),
     };
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       decoration: BoxDecoration(
         color: Tone.paper,
         border: Border.all(color: Tone.line),
@@ -143,7 +143,7 @@ class _Steps extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Slip(
-    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
     child: Column(
       children: [for (final (i, s) in steps.indexed) SlipRow('${i + 1}', s, labelWidth: 32, selectable: false, prose: true)],
     ),
@@ -158,7 +158,7 @@ class _WhySafe extends StatelessWidget {
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       const Icon(Icons.verified_user_outlined, size: 18, color: Tone.muted),
-      const SizedBox(width: 10),
+      const SizedBox(width: 8),
       Expanded(
         child: Text(
           'Why this is safe: USB debugging is Android\'s own connection for computers. Prune installs nothing on '

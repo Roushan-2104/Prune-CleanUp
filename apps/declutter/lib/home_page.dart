@@ -141,6 +141,8 @@ class _Overview extends StatelessWidget {
   /// it without driving the mouse.
   static bool _devOpened = false;
 
+  static final _undoOf = Expando<(UndoableCleanUp?,)>();
+
   @override
   Widget build(BuildContext context) {
     final dev = Platform.environment['PRUNE_OPEN'] ?? '';
@@ -158,7 +160,9 @@ class _Overview extends StatelessWidget {
     final hidden = sum.hidden;
     // Only this phone's own clean-ups: the store is asked by its serial.
     final serial = session.serial;
-    final undo = serial == null ? null : UndoableCleanUp.of(session.store, serial);
+    // Looked up once per read of the phone (every clean-up and Undo ends
+    // with one), not on each of the redraws the photo check causes.
+    final undo = serial == null ? null : (_undoOf[sum] ??= (UndoableCleanUp.of(session.store, serial),)).$1;
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(40, 36, 40, 40),
       child: Center(
@@ -169,9 +173,9 @@ class _Overview extends StatelessWidget {
             children: [
               Text(
                 pick.sureBytes == 0 ? 'Nothing Prune is sure about yet' : 'You can free ${formatBytes(pick.sureBytes)}',
-                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.15),
+                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600, height: 1.15),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Text(
@@ -179,21 +183,21 @@ class _Overview extends StatelessWidget {
                           'your phone hides from its own file list. '}'
                       'It picked only what it is sure about, each with clear proof. Look through it group by '
                       'group, untick anything you want to keep, then clean. Nothing changes on the phone until you do.',
-                  style: const TextStyle(fontSize: 15, color: Tone.muted, height: 1.5),
+                  style: const TextStyle(fontSize: 16, color: Tone.muted, height: 1.5),
                 ),
               ),
               const SizedBox(height: 24),
               if (pick.picked.isNotEmpty) ...[
                 Slip(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'The pick: ${formatCount(pick.sureCount)} items',
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       for (final r in pick.picked)
                         _GroupLine(
                           label: r.category.label,
@@ -215,14 +219,14 @@ class _Overview extends StatelessWidget {
                       label: const Text('Review the pick'),
                     ),
                     const SizedBox(width: 16),
-                    const Text('You can untick anything before cleaning.', style: TextStyle(color: Tone.muted)),
+                    const Text('You can untick anything before cleaning', style: TextStyle(color: Tone.muted)),
                   ],
                 ),
               ],
-              if (session.photos case final p?) ...[const SizedBox(height: 22), _PhotoProgress(scan: p)],
+              if (session.photos case final p?) ...[const SizedBox(height: 24), _PhotoProgress(scan: p)],
               if (pick.check.isNotEmpty) ...[
                 const SizedBox(height: 36),
-                const Text('For you to check', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text('For you to check', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 const Text(
                   'Not picked: these need your eye. Nothing here is ticked unless you tick it.',
@@ -244,9 +248,9 @@ class _Overview extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 36),
-              if (undo != null) ...[_UndoLast(session: session, undo: undo), const SizedBox(height: 10)],
+              if (undo != null) ...[_UndoLast(session: session, undo: undo), const SizedBox(height: 12)],
               _SinceLastTime(session: session),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
                 '${formatCount(sum.files.length)} files listed in ${(session.listTime!.inMilliseconds / 1000).toStringAsFixed(1)} s, '
                 'including ${formatCount(hidden.length)} (${formatBytes(PhoneSummary.bytes(hidden))}) Android hides from its own list. '
@@ -325,7 +329,7 @@ class _GroupLine extends StatelessWidget {
   Widget build(BuildContext context) => InkWell(
     onTap: onTap,
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 9),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Tone.ruling)),
       ),
@@ -371,20 +375,20 @@ class _PhotoProgress extends StatelessWidget {
               TextButton(onPressed: scan.stop, child: const Text('Pause')),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           LinearProgressIndicator(value: scan.total == 0 ? null : scan.done / scan.total, minHeight: 3),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             '${scan.step.isEmpty ? 'Working…' : scan.step} The pick grows as results come in; copies are deleted from '
             'this laptop after each batch.',
             style: const TextStyle(fontSize: 12, color: Tone.muted),
           ),
           if (onBattery()) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             const Row(
               children: [
                 Icon(Icons.power_outlined, size: 16, color: Tone.ink),
-                SizedBox(width: 6),
+                SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     'This laptop is on battery, so Windows slows the check down. Plug it in for a faster check.',
@@ -412,7 +416,7 @@ class _PhotoProgress extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            scan.error ?? (pending == 0 ? 'All photos and screenshots checked.' : '$pending photos not checked yet.'),
+            scan.error ?? (pending == 0 ? 'All photos and screenshots checked' : '$pending photos not checked yet'),
             style: const TextStyle(color: Tone.muted),
           ),
         ),
@@ -520,10 +524,10 @@ class _Guide extends StatelessWidget {
                 children: [
                   if (waiting) ...[
                     const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2.2)),
-                    const SizedBox(width: 14),
+                    const SizedBox(width: 16),
                   ],
                   Flexible(
-                    child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                    child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
