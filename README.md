@@ -9,7 +9,7 @@
 Plug your Android phone into a Windows laptop. Prune reads it, finds what is safe to remove,<br>
 tells you exactly why, and removes only what you confirm. Nothing ever leaves your laptop.
 
-![Version](https://img.shields.io/badge/version-1.0.1-9B7BE0?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.0.2-9B7BE0?style=flat-square)
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-24222A?style=flat-square&logo=windows)
 ![Android](https://img.shields.io/badge/Android-USB-24222A?style=flat-square&logo=android)
 ![Private](https://img.shields.io/badge/no%20cloud-no%20account-24222A?style=flat-square)

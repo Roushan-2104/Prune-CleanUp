@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 /// This copy of Prune. Kept equal to pubspec.yaml's version (a test checks).
-const appVersion = '1.0.1';
+const appVersion = '1.0.2';
 
 const _latestRelease = 'https://api.github.com/repos/Roushan-2104/Prune-CleanUp/releases/latest';
 const releasesPage = 'https://github.com/Roushan-2104/Prune-CleanUp/releases/';
